@@ -143,3 +143,88 @@ class Protocol(ABC):
         if self._client is not None:
             await self._client.aclose()
             self._client = None
+
+    async def _http_get(
+        self,
+        url: str,
+        params: Optional[dict[str, Any]] = None,
+        headers: Optional[dict[str, str]] = None,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """Execute HTTP GET request with standardized error handling.
+
+        Args:
+            url: URL to request (can be relative or absolute)
+            params: Query parameters
+            headers: HTTP headers
+            **kwargs: Additional httpx.get() arguments
+
+        Returns:
+            HTTP response
+
+        Raises:
+            Protocol-specific exception: Wrapped HTTP errors
+        """
+        client = await self._get_client()
+
+        try:
+            response = await client.get(url, params=params, headers=headers, **kwargs)
+            response.raise_for_status()
+            return response
+        except httpx.HTTPError as e:
+            # Wrap in protocol-specific exception
+            raise self._wrap_http_error(e, "GET", url) from e
+
+    async def _http_post(
+        self,
+        url: str,
+        data: Optional[dict[str, Any]] = None,
+        json: Optional[dict[str, Any]] = None,
+        headers: Optional[dict[str, str]] = None,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """Execute HTTP POST request with standardized error handling.
+
+        Args:
+            url: URL to request (can be relative or absolute)
+            data: Form data
+            json: JSON data
+            headers: HTTP headers
+            **kwargs: Additional httpx.post() arguments
+
+        Returns:
+            HTTP response
+
+        Raises:
+            Protocol-specific exception: Wrapped HTTP errors
+        """
+        client = await self._get_client()
+
+        try:
+            response = await client.post(url, data=data, json=json, headers=headers, **kwargs)
+            response.raise_for_status()
+            return response
+        except httpx.HTTPError as e:
+            # Wrap in protocol-specific exception
+            raise self._wrap_http_error(e, "POST", url) from e
+
+    @abstractmethod
+    def _wrap_http_error(self, error: httpx.HTTPError, method: str, url: str) -> Exception:
+        """Wrap HTTP error in protocol-specific exception.
+
+        Subclasses must implement this to provide protocol-specific error messages
+        and exception types.
+
+        Args:
+            error: Original HTTP error
+            method: HTTP method (GET, POST, etc.)
+            url: URL that was requested
+
+        Returns:
+            Protocol-specific exception instance
+
+        Example:
+            >>> def _wrap_http_error(self, error, method, url):
+            ...     return OGCFeaturesError(f"Failed to {method} {url}: {error}")
+        """
+        pass

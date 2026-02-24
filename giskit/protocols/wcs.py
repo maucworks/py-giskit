@@ -95,33 +95,27 @@ class WCSProtocol(Protocol):
         Returns:
             Dictionary with service metadata
         """
-        client = await self._get_client()
         url = self._build_url("GetCapabilities", {})
 
-        try:
-            response = await client.get(url)
-            response.raise_for_status()
+        response = await self._http_get(url)
 
-            # Parse XML response
-            root = ET.fromstring(response.content)
+        # Parse XML response
+        root = ET.fromstring(response.content)
 
-            # Extract coverage offerings
-            # Note: Simplified parsing - may need enhancement for different WCS versions
-            coverages = []
-            for coverage in root.findall(".//{http://www.opengis.net/wcs}CoverageOfferingBrief"):
-                name_elem = coverage.find("{http://www.opengis.net/wcs}name")
-                if name_elem is not None:
-                    coverages.append(name_elem.text)
+        # Extract coverage offerings
+        # Note: Simplified parsing - may need enhancement for different WCS versions
+        coverages = []
+        for coverage in root.findall(".//{http://www.opengis.net/wcs}CoverageOfferingBrief"):
+            name_elem = coverage.find("{http://www.opengis.net/wcs}name")
+            if name_elem is not None:
+                coverages.append(name_elem.text)
 
-            return {
-                "title": "WCS Service",
-                "version": self.version,
-                "coverages": coverages,
-                "base_url": self.base_url,
-            }
-
-        except httpx.HTTPError as e:
-            raise WCSError(f"Failed to get capabilities: {e}") from e
+        return {
+            "title": "WCS Service",
+            "version": self.version,
+            "coverages": coverages,
+            "base_url": self.base_url,
+        }
 
     async def describe_coverage(self) -> dict[str, Any]:
         """Describe coverage metadata.
@@ -132,44 +126,38 @@ class WCSProtocol(Protocol):
         if self._metadata is not None:
             return self._metadata
 
-        client = await self._get_client()
         url = self._build_url("DescribeCoverage", {"coverage": self.coverage_id})
 
-        try:
-            response = await client.get(url)
-            response.raise_for_status()
+        response = await self._http_get(url)
 
-            # Parse XML response
-            root = ET.fromstring(response.content)
+        # Parse XML response
+        root = ET.fromstring(response.content)
 
-            # Extract metadata (simplified - WCS 1.0.0 format)
-            # Note: Different WCS versions have different XML schemas
-            metadata = {
-                "coverage_id": self.coverage_id,
-                "version": self.version,
-                "native_crs": self.native_crs,
-                "native_resolution": self.native_resolution,
-            }
+        # Extract metadata (simplified - WCS 1.0.0 format)
+        # Note: Different WCS versions have different XML schemas
+        metadata = {
+            "coverage_id": self.coverage_id,
+            "version": self.version,
+            "native_crs": self.native_crs,
+            "native_resolution": self.native_resolution,
+        }
 
-            # Try to extract bbox from lonLatEnvelope
-            envelope = root.find(".//{http://www.opengis.net/wcs}lonLatEnvelope")
-            if envelope is not None:
-                pos_elem = envelope.find("{http://www.opengis.net/gml}pos")
-                if pos_elem is not None and pos_elem.text:
-                    coords = pos_elem.text.split()
-                    if len(coords) >= 4:
-                        metadata["bbox_latlon"] = [
-                            float(coords[0]),
-                            float(coords[1]),
-                            float(coords[2]),
-                            float(coords[3]),
-                        ]
+        # Try to extract bbox from lonLatEnvelope
+        envelope = root.find(".//{http://www.opengis.net/wcs}lonLatEnvelope")
+        if envelope is not None:
+            pos_elem = envelope.find("{http://www.opengis.net/gml}pos")
+            if pos_elem is not None and pos_elem.text:
+                coords = pos_elem.text.split()
+                if len(coords) >= 4:
+                    metadata["bbox_latlon"] = [
+                        float(coords[0]),
+                        float(coords[1]),
+                        float(coords[2]),
+                        float(coords[3]),
+                    ]
 
-            self._metadata = metadata
-            return metadata
-
-        except httpx.HTTPError as e:
-            raise WCSError(f"Failed to describe coverage: {e}") from e
+        self._metadata = metadata
+        return metadata
 
     async def get_features(
         self,
@@ -252,47 +240,38 @@ class WCSProtocol(Protocol):
             progress_callback("Downloading coverage data...", 0.2)
 
         # Download coverage
-        client = await self._get_client()
+        response = await self._http_get(url)
 
-        try:
-            response = await client.get(url)
-            response.raise_for_status()
+        if progress_callback:
+            size_mb = len(response.content) / (1024 * 1024)
+            progress_callback(f"Downloaded {size_mb:.2f} MB", 0.7)
 
-            if progress_callback:
-                size_mb = len(response.content) / (1024 * 1024)
-                progress_callback(f"Downloaded {size_mb:.2f} MB", 0.7)
+        # Check if response is an error (XML) instead of raster
+        content_type = response.headers.get("content-type", "")
+        if "xml" in content_type.lower():
+            # Try to parse error message
+            try:
+                root = ET.fromstring(response.content)
+                error_msg = root.text or "Unknown WCS error"
+                raise WCSError(f"WCS service error: {error_msg}")
+            except ET.ParseError:
+                raise WCSError("WCS service returned XML error (parse failed)")
 
-            # Check if response is an error (XML) instead of raster
-            content_type = response.headers.get("content-type", "")
-            if "xml" in content_type.lower():
-                # Try to parse error message
-                try:
-                    root = ET.fromstring(response.content)
-                    error_msg = root.text or "Unknown WCS error"
-                    raise WCSError(f"WCS service error: {error_msg}")
-                except ET.ParseError:
-                    raise WCSError("WCS service returned XML error (parse failed)")
+        # Parse GeoTIFF using rasterio
+        if progress_callback:
+            progress_callback("Parsing GeoTIFF data...", 0.8)
 
-            # Parse GeoTIFF using rasterio
-            if progress_callback:
-                progress_callback("Parsing GeoTIFF data...", 0.8)
+        with MemoryFile(response.content) as memfile:
+            with memfile.open() as dataset:
+                # Read first band (elevation data is typically single-band)
+                data = dataset.read(1)
 
-            with MemoryFile(response.content) as memfile:
-                with memfile.open() as dataset:
-                    # Read first band (elevation data is typically single-band)
-                    data = dataset.read(1)
+                # Get metadata
 
-                    # Get metadata
+                if progress_callback:
+                    progress_callback(f"Loaded {data.shape[0]}x{data.shape[1]} elevation grid", 0.9)
 
-                    if progress_callback:
-                        progress_callback(
-                            f"Loaded {data.shape[0]}x{data.shape[1]} elevation grid", 0.9
-                        )
-
-            return data
-
-        except httpx.HTTPError as e:
-            raise WCSError(f"Failed to download coverage: {e}") from e
+        return data
 
     async def save_coverage_as_geotiff(
         self,
@@ -355,6 +334,19 @@ class WCSProtocol(Protocol):
             progress_callback(f"Saved to {output_path.name}", 1.0)
 
         return output_path
+
+    def _wrap_http_error(self, error: httpx.HTTPError, method: str, url: str) -> Exception:
+        """Wrap HTTP error in WCSError.
+
+        Args:
+            error: Original HTTP error
+            method: HTTP method (GET, POST, etc.)
+            url: URL that was requested
+
+        Returns:
+            WCSError with descriptive message
+        """
+        return WCSError(f"Failed to {method} {url}: {error}")
 
 
 # Register protocol factory

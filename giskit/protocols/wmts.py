@@ -228,18 +228,16 @@ class WMTSProtocol(Protocol):
         Returns:
             PIL Image or None if download failed
         """
-        client = await self._get_client()
         url = self.get_tile_url(zoom, tile_col, tile_row)
 
         try:
-            response = await client.get(url)
-            response.raise_for_status()
+            response = await self._http_get(url)
 
             # Load image from bytes
             img = Image.open(io.BytesIO(response.content))
             return img
 
-        except httpx.HTTPError:
+        except WMTSError:
             # Tile might not exist (outside coverage area)
             return None
 
@@ -371,6 +369,19 @@ class WMTSProtocol(Protocol):
             progress_callback(f"Final image: {result.width}x{result.height} pixels", 0.9)
 
         return result
+
+    def _wrap_http_error(self, error: httpx.HTTPError, method: str, url: str) -> Exception:
+        """Wrap HTTP error in WMTSError.
+
+        Args:
+            error: Original HTTP error
+            method: HTTP method (GET, POST, etc.)
+            url: URL that was requested
+
+        Returns:
+            WMTSError with descriptive message
+        """
+        return WMTSError(f"Failed to {method} {url}: {error}")
 
 
 # Register protocol factory

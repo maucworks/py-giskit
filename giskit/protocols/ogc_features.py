@@ -65,41 +65,34 @@ class OGCFeaturesProtocol(Protocol):
         Returns:
             Dictionary with service metadata
         """
-        client = await self._get_client()
+        # Build request params with quirks applied
+        params = self.quirks.apply_to_params({})
 
-        try:
-            # Build request params with quirks applied
-            params = self.quirks.apply_to_params({})
+        # Get collections list
+        response = await self._http_get(urljoin(self.base_url, "collections"), params=params)
+        data = response.json()
 
-            # Get collections list
-            response = await client.get(urljoin(self.base_url, "collections"), params=params)
-            response.raise_for_status()
-            data = response.json()
+        collections = data.get("collections", [])
 
-            collections = data.get("collections", [])
+        # Extract layer names and metadata
+        layers = []
+        for coll in collections:
+            layers.append(
+                {
+                    "id": coll.get("id"),
+                    "title": coll.get("title"),
+                    "description": coll.get("description"),
+                    "extent": coll.get("extent"),
+                }
+            )
 
-            # Extract layer names and metadata
-            layers = []
-            for coll in collections:
-                layers.append(
-                    {
-                        "id": coll.get("id"),
-                        "title": coll.get("title"),
-                        "description": coll.get("description"),
-                        "extent": coll.get("extent"),
-                    }
-                )
-
-            return {
-                "title": data.get("title", "Unknown"),
-                "layers": [layer["id"] for layer in layers],
-                "layer_details": layers,
-                "crs": ["EPSG:4326"],  # OGC Features always supports WGS84
-                "formats": ["application/geo+json"],
-            }
-
-        except httpx.HTTPError as e:
-            raise OGCFeaturesError(f"Failed to get capabilities: {e}") from e
+        return {
+            "title": data.get("title", "Unknown"),
+            "layers": [layer["id"] for layer in layers],
+            "layer_details": layers,
+            "crs": ["EPSG:4326"],  # OGC Features always supports WGS84
+            "formats": ["application/geo+json"],
+        }
 
     async def get_features(
         self,
@@ -432,102 +425,94 @@ class OGCFeaturesProtocol(Protocol):
         next_url = None
         page_num = 1
 
-        try:
-            # Download first page
-            response = await client.get(url, params=params)
-            response.raise_for_status()
+        # Download first page
+        response = await self._http_get(url, params=params)
+        geojson = response.json()
+
+        # Check if we know total count for progress indicator
+        total_matched = geojson.get("numberMatched")
+        if total_matched:
+            logger.info(f"Downloading {total_matched:,} features (max {page_limit} per page)...")
+
+        # Determine format from first response
+        is_cityjson = False
+        lod = "0"
+
+        if "features" in geojson and geojson["features"]:
+            first_feature = geojson["features"][0]
+            if "CityObjects" in first_feature:
+                is_cityjson = True
+                # Extract LOD for CityJSON
+                if collection_id.startswith("lod"):
+                    lod_num = collection_id[3:]
+                    if len(lod_num) == 2:
+                        lod = f"{lod_num[0]}.{lod_num[1]}"
+
+        # Process all pages
+        while True:
+            if "features" not in geojson or not geojson["features"]:
+                break
+
+            # Parse this page
+            if is_cityjson:
+                from giskit.protocols.cityjson import cityjson_to_geodataframe
+
+                gdf = cityjson_to_geodataframe(geojson, lod=lod)
+                if not gdf.empty:
+                    gdf.set_crs("EPSG:28992", inplace=True)
+            else:
+                gdf = gpd.GeoDataFrame.from_features(geojson["features"])
+                gdf.set_crs("EPSG:4326", inplace=True)
+
+            if not gdf.empty:
+                all_gdfs.append(gdf)
+                total_features += len(gdf)
+
+                # Show progress
+                if total_matched:
+                    progress_pct = (total_features / total_matched) * 100
+                    logger.info(
+                        f"Progress: {total_features:,}/{total_matched:,} ({progress_pct:.0f}%) - page {page_num}",
+                    )
+                else:
+                    logger.info(
+                        f"Downloaded {total_features:,} features (page {page_num})",
+                    )
+
+            # Check if we've reached the limit
+            if limit and total_features >= limit:
+                break
+
+            # Check for next page link
+            next_url = None
+            if "links" in geojson:
+                for link in geojson["links"]:
+                    if link.get("rel") == "next":
+                        next_url = link.get("href")
+                        break
+
+            if not next_url:
+                break  # No more pages
+
+            # Fetch next page
+            page_num += 1
+            response = await self._http_get(next_url)
             geojson = response.json()
 
-            # Check if we know total count for progress indicator
-            total_matched = geojson.get("numberMatched")
-            if total_matched:
-                logger.info(
-                    f"Downloading {total_matched:,} features (max {page_limit} per page)..."
-                )
+        # Combine all pages
+        if not all_gdfs:
+            return gpd.GeoDataFrame()
 
-            # Determine format from first response
-            is_cityjson = False
-            lod = "0"
+        combined = gpd.GeoDataFrame(gpd.pd.concat(all_gdfs, ignore_index=True))
 
-            if "features" in geojson and geojson["features"]:
-                first_feature = geojson["features"][0]
-                if "CityObjects" in first_feature:
-                    is_cityjson = True
-                    # Extract LOD for CityJSON
-                    if collection_id.startswith("lod"):
-                        lod_num = collection_id[3:]
-                        if len(lod_num) == 2:
-                            lod = f"{lod_num[0]}.{lod_num[1]}"
+        # Apply temporal filtering based on strategy
+        combined = self._apply_temporal_filter(combined, temporal)
 
-            # Process all pages
-            while True:
-                if "features" not in geojson or not geojson["features"]:
-                    break
+        # Apply limit if specified
+        if limit and len(combined) > limit:
+            combined = combined.iloc[:limit]
 
-                # Parse this page
-                if is_cityjson:
-                    from giskit.protocols.cityjson import cityjson_to_geodataframe
-
-                    gdf = cityjson_to_geodataframe(geojson, lod=lod)
-                    if not gdf.empty:
-                        gdf.set_crs("EPSG:28992", inplace=True)
-                else:
-                    gdf = gpd.GeoDataFrame.from_features(geojson["features"])
-                    gdf.set_crs("EPSG:4326", inplace=True)
-
-                if not gdf.empty:
-                    all_gdfs.append(gdf)
-                    total_features += len(gdf)
-
-                    # Show progress
-                    if total_matched:
-                        progress_pct = (total_features / total_matched) * 100
-                        logger.info(
-                            f"Progress: {total_features:,}/{total_matched:,} ({progress_pct:.0f}%) - page {page_num}",
-                        )
-                    else:
-                        logger.info(
-                            f"Downloaded {total_features:,} features (page {page_num})",
-                        )
-
-                # Check if we've reached the limit
-                if limit and total_features >= limit:
-                    break
-
-                # Check for next page link
-                next_url = None
-                if "links" in geojson:
-                    for link in geojson["links"]:
-                        if link.get("rel") == "next":
-                            next_url = link.get("href")
-                            break
-
-                if not next_url:
-                    break  # No more pages
-
-                # Fetch next page
-                page_num += 1
-                response = await client.get(next_url)
-                response.raise_for_status()
-                geojson = response.json()
-
-            # Combine all pages
-            if not all_gdfs:
-                return gpd.GeoDataFrame()
-
-            combined = gpd.GeoDataFrame(gpd.pd.concat(all_gdfs, ignore_index=True))
-
-            # Apply temporal filtering based on strategy
-            combined = self._apply_temporal_filter(combined, temporal)
-
-            # Apply limit if specified
-            if limit and len(combined) > limit:
-                combined = combined.iloc[:limit]
-
-            return combined
-
-        except httpx.HTTPError as e:
-            raise OGCFeaturesError(f"Failed to download collection {collection_id}: {e}") from e
+        return combined
 
     def _apply_temporal_filter(
         self, gdf: gpd.GeoDataFrame, temporal: str = "latest"
@@ -649,6 +634,19 @@ class OGCFeaturesProtocol(Protocol):
             "OGC Features protocol does not support raster coverage. "
             "Use OGC Coverages or WMTS protocol instead."
         )
+
+    def _wrap_http_error(self, error: httpx.HTTPError, method: str, url: str) -> Exception:
+        """Wrap HTTP error in OGCFeaturesError.
+
+        Args:
+            error: Original HTTP error
+            method: HTTP method (GET, POST, etc.)
+            url: URL that was requested
+
+        Returns:
+            OGCFeaturesError with descriptive message
+        """
+        return OGCFeaturesError(f"Failed to {method} {url}: {error}")
 
 
 # Register protocol factory

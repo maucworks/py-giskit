@@ -144,23 +144,18 @@ class WFSProtocol(Protocol):
             "count": limit,
         }
 
-        try:
-            response = await client.get(self.base_url, params=params)
-            response.raise_for_status()
+        response = await self._http_get(self.base_url, params=params)
 
-            # Parse GeoJSON response
-            geojson = response.json()
+        # Parse GeoJSON response
+        geojson = response.json()
 
-            # Convert to GeoDataFrame
-            if "features" in geojson and geojson["features"]:
-                gdf = gpd.GeoDataFrame.from_features(geojson["features"])
-                gdf.set_crs(crs, inplace=True)
-                return gdf
-            else:
-                return gpd.GeoDataFrame()
-
-        except httpx.HTTPError as e:
-            raise WFSError(f"Failed to download {layer_name}: {e}") from e
+        # Convert to GeoDataFrame
+        if "features" in geojson and geojson["features"]:
+            gdf = gpd.GeoDataFrame.from_features(geojson["features"])
+            gdf.set_crs(crs, inplace=True)
+            return gdf
+        else:
+            return gpd.GeoDataFrame()
 
     async def get_coverage(
         self,
@@ -178,6 +173,19 @@ class WFSProtocol(Protocol):
         raise NotImplementedError(
             "WFS protocol does not support raster coverage. " "Use WCS or WMTS protocol instead."
         )
+
+    def _wrap_http_error(self, error: httpx.HTTPError, method: str, url: str) -> Exception:
+        """Wrap HTTP error in WFSError.
+
+        Args:
+            error: Original HTTP error
+            method: HTTP method (GET, POST, etc.)
+            url: URL that was requested
+
+        Returns:
+            WFSError with descriptive message
+        """
+        return WFSError(f"Failed to {method} {url}: {error}")
 
 
 # Register protocol factory
