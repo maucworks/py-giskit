@@ -441,7 +441,9 @@ class OGCFeaturesProtocol(Protocol):
             # Check if we know total count for progress indicator
             total_matched = geojson.get("numberMatched")
             if total_matched:
-                logger.info(f"Downloading {total_matched:,} features (max {page_limit} per page)...")
+                logger.info(
+                    f"Downloading {total_matched:,} features (max {page_limit} per page)..."
+                )
 
             # Determine format from first response
             is_cityjson = False
@@ -647,3 +649,47 @@ class OGCFeaturesProtocol(Protocol):
             "OGC Features protocol does not support raster coverage. "
             "Use OGC Coverages or WMTS protocol instead."
         )
+
+
+# Register protocol factory
+def _create_ogc_features_protocol(config: dict[str, Any]) -> OGCFeaturesProtocol:
+    """Factory function for creating OGC Features protocol instances.
+
+    Args:
+        config: Configuration dictionary with keys:
+            - url: Base URL for the service
+            - service_id: Service identifier for quirks lookup (optional)
+            - provider_name: Provider name for quirks lookup (optional)
+            - quirks: Pre-constructed quirks object (optional)
+
+    Returns:
+        OGCFeaturesProtocol instance
+    """
+    from giskit.protocols.quirks import get_service_quirks
+
+    url = config.get("url", "")
+    service_id = config.get("service_id")
+    provider_name = config.get("provider_name", "pdok")
+
+    # Get or use provided quirks
+    if "quirks" in config:
+        quirks = config["quirks"]
+    elif service_id:
+        quirks = get_service_quirks(provider_name, "ogc-features", service_id)
+    else:
+        # No quirks - try to infer from URL or config
+        fallback_id = config.get("title", "").split(" - ")[0].lower()
+        if not fallback_id and url:
+            fallback_id = url.split("/")[-2]
+        if fallback_id:
+            quirks = get_service_quirks(provider_name, "ogc-features", fallback_id)
+        else:
+            quirks = None
+
+    return OGCFeaturesProtocol(base_url=url, quirks=quirks)
+
+
+# Register with global registry
+from giskit.protocols.registry import register_protocol
+
+register_protocol("ogc-features", _create_ogc_features_protocol)

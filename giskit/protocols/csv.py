@@ -258,3 +258,23 @@ class CSVProtocol:
             logger.debug(f"Geocoding failed for '{address}': {e}")
 
         return None
+
+
+# Register protocol factory
+def _create_csv_protocol(config: dict[str, Any]) -> "CSVProtocol":
+    """Factory function for creating CSV protocol instances.
+
+    Args:
+        config: Configuration dictionary (base_url not required for CSV)
+
+    Returns:
+        CSVProtocol instance
+    """
+    # CSV protocol takes URL from service config at fetch time
+    return CSVProtocol()
+
+
+# Register with global registry
+from giskit.protocols.registry import register_protocol
+
+register_protocol("csv", _create_csv_protocol)

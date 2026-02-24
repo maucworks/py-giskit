@@ -355,3 +355,43 @@ class WCSProtocol(Protocol):
             progress_callback(f"Saved to {output_path.name}", 1.0)
 
         return output_path
+
+
+# Register protocol factory
+def _create_wcs_protocol(config: dict[str, Any]) -> "WCSProtocol":
+    """Factory function for creating WCS protocol instances.
+
+    Args:
+        config: Configuration dictionary with keys:
+            - url: Base URL for the WCS service
+            - coverage_id: Coverage identifier (required)
+            - native_crs: Native CRS of the coverage (optional, default: EPSG:28992)
+            - native_resolution: Native resolution in meters (optional)
+
+    Returns:
+        WCSProtocol instance
+
+    Raises:
+        ValueError: If required 'coverage_id' parameter is missing
+    """
+    url = config.get("url", "")
+    coverage_id = config.get("coverage_id")
+
+    if not coverage_id:
+        raise ValueError("WCS protocol requires 'coverage_id' parameter in config")
+
+    native_crs = config.get("native_crs", "EPSG:28992")
+    native_resolution = config.get("native_resolution")
+
+    return WCSProtocol(
+        base_url=url,
+        coverage_id=coverage_id,
+        native_crs=native_crs,
+        native_resolution=native_resolution,
+    )
+
+
+# Register with global registry
+from giskit.protocols.registry import register_protocol
+
+register_protocol("wcs", _create_wcs_protocol)

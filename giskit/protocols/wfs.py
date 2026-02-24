@@ -178,3 +178,23 @@ class WFSProtocol(Protocol):
         raise NotImplementedError(
             "WFS protocol does not support raster coverage. " "Use WCS or WMTS protocol instead."
         )
+
+
+# Register protocol factory
+def _create_wfs_protocol(config: dict[str, Any]) -> "WFSProtocol":
+    """Factory function for creating WFS protocol instances.
+
+    Args:
+        config: Configuration dictionary with keys:
+            - url: Base URL for the WFS service
+
+    Returns:
+        WFSProtocol instance
+    """
+    return WFSProtocol(config.get("url", ""))
+
+
+# Register with global registry
+from giskit.protocols.registry import register_protocol
+
+register_protocol("wfs", _create_wfs_protocol)

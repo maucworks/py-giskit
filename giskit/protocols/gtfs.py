@@ -238,4 +238,24 @@ class GTFSProtocol(Protocol):
         raise NotImplementedError("GTFS protocol only supports vector data (stops)")
 
 
+# Register protocol factory
+def _create_gtfs_protocol(config: dict[str, Any]) -> "GTFSProtocol":
+    """Factory function for creating GTFS protocol instances.
+
+    Args:
+        config: Configuration dictionary (base_url not required for GTFS)
+
+    Returns:
+        GTFSProtocol instance
+    """
+    # GTFS protocol takes base_url from service config at fetch time
+    return GTFSProtocol(base_url=config.get("url", ""))
+
+
+# Register with global registry
+from giskit.protocols.registry import register_protocol
+
+register_protocol("gtfs", _create_gtfs_protocol)
+
+
 __all__ = ["GTFSProtocol"]

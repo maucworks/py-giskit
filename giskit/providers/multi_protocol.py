@@ -217,7 +217,7 @@ class MultiProtocolProvider(Provider):
     def _create_protocol_handler(
         self, protocol_name: str, service_config: dict[str, Any], service_id: str | None = None
     ) -> Protocol:
-        """Create appropriate protocol handler.
+        """Create appropriate protocol handler using the protocol registry.
 
         Args:
             protocol_name: Protocol identifier (ogc-features, wcs, wmts)
@@ -230,11 +230,20 @@ class MultiProtocolProvider(Provider):
         Raises:
             ValueError: If protocol not supported
         """
+        from giskit.protocols.registry import create_protocol
+
+        # Build config for protocol factory
+        config = {
+            "url": service_config.get("url", ""),
+            "service_id": service_id,
+            "provider_name": self.name,
+        }
+
+        # Add protocol-specific parameters
         if protocol_name == "ogc-features":
-            from giskit.protocols.ogc_features import OGCFeaturesProtocol
+            # Handle quirks for OGC Features
             from giskit.protocols.quirks import get_service_quirks
 
-            # Get proper quirks object for this service
             if service_id:
                 quirks = get_service_quirks(self.name, protocol_name, service_id)
             else:
@@ -244,35 +253,22 @@ class MultiProtocolProvider(Provider):
                     fallback_id = service_config.get("url", "").split("/")[-2]
                 quirks = get_service_quirks(self.name, protocol_name, fallback_id)
 
-            return OGCFeaturesProtocol(service_config["url"], quirks=quirks)
-
-        elif protocol_name == "wcs":
-            from giskit.protocols.wcs import WCSProtocol
-
-            return WCSProtocol(service_config["url"])
+            config["quirks"] = quirks
 
         elif protocol_name == "wmts":
-            from giskit.protocols.wmts import WMTSProtocol
+            # WMTS needs layer and tile matrix set
+            config["layer"] = service_config.get("layer", "")
+            config["tile_matrix_set"] = service_config.get("tile_matrix_set", "EPSG:28992")
+            config["tile_format"] = service_config.get("tile_format", "jpeg")
 
-            return WMTSProtocol(service_config["url"])
+        elif protocol_name == "wcs":
+            # WCS needs coverage ID and native CRS
+            config["coverage_id"] = service_config.get("coverage_id", "")
+            config["native_crs"] = service_config.get("native_crs", "EPSG:28992")
+            config["native_resolution"] = service_config.get("native_resolution")
 
-        elif protocol_name == "gtfs":
-            from giskit.protocols.gtfs import GTFSProtocol
-
-            return GTFSProtocol()
-
-        elif protocol_name == "csv":
-            from giskit.protocols.csv import CSVProtocol
-
-            return CSVProtocol()
-
-        elif protocol_name == "wfs":
-            from giskit.protocols.wfs import WFSProtocol
-
-            return WFSProtocol(service_config["url"])
-
-        else:
-            raise ValueError(f"Unsupported protocol: {protocol_name}")
+        # Use registry to create protocol instance
+        return create_protocol(protocol_name, config)
 
     def get_supported_services(self) -> list[str]:
         """Get list of all supported services across all protocols.

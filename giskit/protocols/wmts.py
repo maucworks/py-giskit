@@ -371,3 +371,40 @@ class WMTSProtocol(Protocol):
             progress_callback(f"Final image: {result.width}x{result.height} pixels", 0.9)
 
         return result
+
+
+# Register protocol factory
+def _create_wmts_protocol(config: dict[str, Any]) -> "WMTSProtocol":
+    """Factory function for creating WMTS protocol instances.
+
+    Args:
+        config: Configuration dictionary with keys:
+            - url: Base URL for the WMTS service
+            - layer: Layer name (required)
+            - tile_matrix_set: TileMatrixSet identifier (optional, default: EPSG:28992)
+            - tile_format: Image format (optional, default: jpeg)
+
+    Returns:
+        WMTSProtocol instance
+
+    Raises:
+        ValueError: If required 'layer' parameter is missing
+    """
+    url = config.get("url", "")
+    layer = config.get("layer")
+
+    if not layer:
+        raise ValueError("WMTS protocol requires 'layer' parameter in config")
+
+    tile_matrix_set = config.get("tile_matrix_set", "EPSG:28992")
+    tile_format = config.get("tile_format", "jpeg")
+
+    return WMTSProtocol(
+        base_url=url, layer=layer, tile_matrix_set=tile_matrix_set, tile_format=tile_format
+    )
+
+
+# Register with global registry
+from giskit.protocols.registry import register_protocol
+
+register_protocol("wmts", _create_wmts_protocol)
