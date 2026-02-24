@@ -2,37 +2,19 @@
 
 import asyncio
 import logging
-import re
 from pathlib import Path
 
 import click
 from rich.console import Console
 
-from giskit.core.constants import BGT_ALL_LAYERS_THRESHOLD
 from giskit.core.recipe import Recipe
+from giskit.core.runner import RecipeRunner
 
 console = Console()
 
 
-def _normalize_layer_name(name: str) -> str:
-    """Normalize layer name to snake_case.
-
-    Converts PascalCase/camelCase to snake_case for consistency.
-    Examples:
-        Perceel -> perceel
-        BuildingPart -> building_part
-        pand -> pand (already lowercase)
-    """
-    # Insert underscore before uppercase letters (but not at start)
-    s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
-    # Insert underscore before uppercase letters that follow lowercase
-    s2 = re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1)
-    # Convert to lowercase
-    return s2.lower()
-
-
 async def _execute_recipe(recipe: Recipe, recipe_dir: Path, console: Console, verbose: bool):
-    """Execute a recipe asynchronously.
+    """Execute a recipe asynchronously using RecipeRunner.
 
     Args:
         recipe: Recipe to execute
@@ -43,212 +25,34 @@ async def _execute_recipe(recipe: Recipe, recipe_dir: Path, console: Console, ve
     Returns:
         Dictionary mapping layer names to GeoDataFrames
     """
-    import geopandas as gpd
+    # Create runner
+    runner = RecipeRunner(recipe, recipe_dir)
 
-    # Get bbox from location
-    with console.status("[bold green]Calculating bounding box..."):
-        bbox = await recipe.get_bbox_wgs84()
+    # Define progress callback for console output
+    current_status = None
 
-    if verbose:
-        console.print(f"  BBox (WGS84): {bbox}")
+    def progress_callback(message: str, progress: float) -> None:
+        nonlocal current_status
+        # Update or create status display
+        if current_status:
+            current_status.stop()
 
-    # Resolve output path relative to recipe directory if it's relative
-    output_path = recipe.output.path
-    if not output_path.is_absolute():
-        output_path = recipe_dir / output_path
-
-    # Download each dataset - store as separate layers
-    layers = {}
-
-    for i, dataset in enumerate(recipe.datasets, 1):
-        console.print(f"\n[bold]Dataset {i}/{len(recipe.datasets)}:[/bold] {dataset.provider}")
-
-        if dataset.service:
-            console.print(f"  Service: {dataset.service}")
-        if dataset.layers:
-            console.print(f"  Layers: {', '.join(dataset.layers)}")
-
-        try:
-            # Get provider
-            from giskit.providers.base import get_provider
-
-            provider = get_provider(dataset.provider)
-
-            # Convert bbox to Location for compatibility
-            from giskit.core.recipe import Location, LocationType
-
-            bbox_location = Location(
-                type=LocationType.BBOX, value=list(bbox), crs="EPSG:4326", radius=None
-            )
-
-            # Download dataset
-            with console.status(f"[bold green]Downloading from {dataset.provider}..."):
-                gdf = await provider.download_dataset(
-                    dataset=dataset,
-                    location=bbox_location,
-                    output_path=output_path,
-                    output_crs=recipe.output.crs,
-                )
-
-            if not gdf.empty:
-                console.print(f"  [green]✓[/green] Downloaded {len(gdf)} features")
-
-                # Store with layer name: service_layer or just service
-                service = dataset.service or dataset.provider
-
-                # Check if gdf has collection/layer information (from multi-layer downloads)
-                if "_collection" in gdf.columns:
-                    # Split by collection/layer
-                    for collection_name in gdf["_collection"].unique():
-                        layer_gdf = gdf[gdf["_collection"] == collection_name].copy()
-                        # Normalize collection name to snake_case
-                        normalized_name = _normalize_layer_name(collection_name)
-                        full_layer_name = f"{service}_{normalized_name}"
-                        layers[full_layer_name] = layer_gdf
-                elif "_layer" in gdf.columns:
-                    # Alternative layer column name
-                    for layer_name in gdf["_layer"].unique():
-                        layer_gdf = gdf[gdf["_layer"] == layer_name].copy()
-                        # Normalize layer name to snake_case
-                        normalized_name = _normalize_layer_name(layer_name)
-                        full_layer_name = f"{service}_{normalized_name}"
-                        layers[full_layer_name] = layer_gdf
-                else:
-                    # Single layer - use service name or first layer from request
-                    if dataset.layers and len(dataset.layers) == 1:
-                        layer_name = f"{service}_{dataset.layers[0]}"
-                    else:
-                        layer_name = service
-                    layers[layer_name] = gdf
-            else:
-                console.print("  [yellow]No features found[/yellow]")
-
-        except Exception as e:
-            console.print(f"  [red]✗[/red] Failed: {e}")
-            if verbose:
-                console.print_exception()
-            # Continue with other datasets
-
-    # Add metadata layer if we have a bbox
-    if layers and recipe.output.format.value == "gpkg":
-        from datetime import datetime
-
-        from shapely.geometry import Point
-
-        from giskit.core.spatial import transform_bbox
-
-        # Transform bbox to output CRS
-        bbox_output_crs = transform_bbox(bbox, "EPSG:4326", recipe.output.crs)
-
-        # Get origin point from recipe location (the point the user specified)
-        # This is the point that will be at (0,0,0) in IFC exports
-        from giskit.core.geocoding import geocode
-        from giskit.core.recipe import LocationType
-        from giskit.core.spatial import transform_point
-
-        if recipe.location.type == LocationType.POINT:
-            # Point location - use the exact coordinates specified
-            point_coords: list = recipe.location.value  # type: ignore
-            lon, lat = float(point_coords[0]), float(point_coords[1])
-            # Transform from location CRS to output CRS
-            origin_x, origin_y = transform_point(lon, lat, recipe.location.crs, recipe.output.crs)
-        elif recipe.location.type == LocationType.ADDRESS:
-            # Address location - geocode to get the point, then transform
-            address_str: str = recipe.location.value  # type: ignore
-            lon, lat = await geocode(address_str)
-            origin_x, origin_y = transform_point(lon, lat, "EPSG:4326", recipe.output.crs)
-        elif recipe.location.type == LocationType.BBOX:
-            # Bbox location - use center of bbox
-            origin_x = (bbox_output_crs[0] + bbox_output_crs[2]) / 2
-            origin_y = (bbox_output_crs[1] + bbox_output_crs[3]) / 2
-        elif recipe.location.type == LocationType.POLYGON:
-            # Polygon location - use 2D centroid
-            from shapely.geometry import Polygon
-
-            poly_coords: list = recipe.location.value  # type: ignore
-            polygon = Polygon(poly_coords)
-            centroid = polygon.centroid
-            # Transform centroid from location CRS to output CRS
-            origin_x, origin_y = transform_point(
-                centroid.x, centroid.y, recipe.location.crs, recipe.output.crs
-            )
+        if progress < 1.0:
+            current_status = console.status(f"[bold green]{message}")
+            current_status.start()
         else:
-            # Fallback to bbox center
-            origin_x = (bbox_output_crs[0] + bbox_output_crs[2]) / 2
-            origin_y = (bbox_output_crs[1] + bbox_output_crs[3]) / 2
+            current_status = None
 
-        # Build metadata dict - exact column order matching Sitedb
-        metadata_dict = {
-            "address": [None],
-            "x": [origin_x],
-            "y": [origin_y],
-            "radius": [None],
-            "bbox_minx": [bbox_output_crs[0]],
-            "bbox_miny": [bbox_output_crs[1]],
-            "bbox_maxx": [bbox_output_crs[2]],
-            "bbox_maxy": [bbox_output_crs[3]],
-            "download_date": [datetime.now().isoformat()],
-            "crs": [recipe.output.crs],
-            "grid_size": [None],  # For raster data, optional
-            "bgt_layers": [None],  # Which BGT layers were requested
-            "bag3d_lods": [None],  # Which BAG3D LOD levels were requested
-        }
+    # Execute recipe
+    layers = await runner.execute(progress_callback if not verbose else None)
 
-        # Add location-specific fields
-        if recipe.location.type.value == "address":
-            metadata_dict["address"] = [recipe.location.value]
-            if recipe.location.radius is not None:
-                metadata_dict["radius"] = [recipe.location.radius]
-        elif recipe.location.type.value == "point":
-            if recipe.location.radius is not None:
-                metadata_dict["radius"] = [recipe.location.radius]
+    # Print verbose output if requested
+    if verbose and layers:
+        console.print(f"\n[bold]Downloaded Layers:[/bold]")
+        for layer_name, gdf in layers.items():
+            console.print(f"  {layer_name}: {len(gdf)} features")
 
-        # Extract dataset-specific metadata for traceability
-        bgt_layers_list = []
-        bag3d_lods_list = []
-
-        for dataset in recipe.datasets:
-            service = dataset.service or dataset.provider
-
-            # Track BGT layers
-            if service == "bgt" and dataset.layers:
-                bgt_layers_list.extend(dataset.layers)
-
-            # Track BAG3D LOD levels
-            elif service == "bag3d" and dataset.layers:
-                # Extract LOD levels (lod12 -> 1.2, lod13 -> 1.3, lod22 -> 2.2)
-                for layer in dataset.layers:
-                    if layer.startswith("lod"):
-                        # Convert lod12 -> 1.2
-                        lod_num = layer[3:]  # "12", "13", "22"
-                        if len(lod_num) == 2:
-                            lod_formatted = f"{lod_num[0]}.{lod_num[1]}"
-                            bag3d_lods_list.append(lod_formatted)
-
-            # Track grid_size if resolution is specified (for raster data)
-            if dataset.resolution is not None:
-                metadata_dict["grid_size"] = [dataset.resolution]
-
-        # Store BGT layers (or "all" if many layers)
-        if bgt_layers_list:
-            # Sitedb uses "all" if all BGT layers are included
-            if len(bgt_layers_list) > BGT_ALL_LAYERS_THRESHOLD:
-                metadata_dict["bgt_layers"] = ["all"]
-            else:
-                metadata_dict["bgt_layers"] = [",".join(sorted(bgt_layers_list))]
-
-        # Store BAG3D LOD levels
-        if bag3d_lods_list:
-            metadata_dict["bag3d_lods"] = [",".join(sorted(bag3d_lods_list))]
-
-        # Create metadata GeoDataFrame
-        metadata_gdf = gpd.GeoDataFrame(
-            metadata_dict, geometry=[Point(origin_x, origin_y)], crs=recipe.output.crs
-        )
-
-        layers["_metadata"] = metadata_gdf
-
-    return layers if layers else None
+    return layers
 
 
 @click.command()
@@ -275,7 +79,7 @@ def run(recipe_path: Path, verbose: bool, dry_run: bool, log_level: str) -> None
         level=getattr(logging, log_level.upper()),
         format="%(levelname)s: %(message)s",
     )
-    
+
     try:
         # Load recipe
         with console.status("[bold green]Loading recipe..."):
