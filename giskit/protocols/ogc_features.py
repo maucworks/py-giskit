@@ -4,6 +4,7 @@ Supports OGC API - Features (formerly WFS 3.0).
 Specification: https://ogcapi.ogc.org/features/
 """
 
+import logging
 from typing import Any, Optional
 from urllib.parse import urljoin
 
@@ -17,6 +18,8 @@ from giskit.core.constants import (
 )
 from giskit.protocols.base import Protocol
 from giskit.protocols.quirks import ProtocolQuirks
+
+logger = logging.getLogger(__name__)
 
 
 class OGCFeaturesError(Exception):
@@ -197,7 +200,7 @@ class OGCFeaturesProtocol(Protocol):
                     all_gdfs.append(gdf)
             except Exception as e:
                 # Log error but continue with other collections
-                print(f"Warning: Failed to download {collection_id}: {e}")
+                logger.warning(f"Failed to download {collection_id}: {e}")
 
         if not all_gdfs:
             # Return empty GeoDataFrame
@@ -252,8 +255,8 @@ class OGCFeaturesProtocol(Protocol):
 
         # Subdivide bbox into grid cells
         cells = subdivide_bbox(bbox, grid_cell_size, crs=bbox_crs)
-        print(f"  Splitting area into {len(cells)} grid cells ({grid_cell_size}m each)...")
-        print(f"  Downloading with max {max_concurrent} concurrent requests...")
+        logger.info(f"Splitting area into {len(cells)} grid cells ({grid_cell_size}m each)...")
+        logger.info(f"Downloading with max {max_concurrent} concurrent requests...")
 
         # Download cells in batches to limit concurrency
         all_gdfs = []
@@ -266,8 +269,8 @@ class OGCFeaturesProtocol(Protocol):
             batch_cells = cells[batch_start:batch_end]
             batch_indices = list(range(batch_start + 1, batch_end + 1))
 
-            print(
-                f"  Processing batch: cells {batch_indices[0]}-{batch_indices[-1]} of {len(cells)}..."
+            logger.debug(
+                f"Processing batch: cells {batch_indices[0]}-{batch_indices[-1]} of {len(cells)}..."
             )
 
             # Download all cells in this batch concurrently
@@ -298,8 +301,8 @@ class OGCFeaturesProtocol(Protocol):
                         if attempt < max_retries - 1 and is_retryable:
                             # Exponential backoff: 2s, 4s, 8s
                             delay = base_delay * (2**attempt)
-                            print(
-                                f"  Cell {cell_idx}: Retry {attempt + 1}/{max_retries} after {delay}s (error: {error_msg})"
+                            logger.debug(
+                                f"Cell {cell_idx}: Retry {attempt + 1}/{max_retries} after {delay}s (error: {error_msg})"
                             )
                             await asyncio.sleep(delay)
                         else:
@@ -321,11 +324,11 @@ class OGCFeaturesProtocol(Protocol):
             # Process results from this batch
             for cell_idx, gdf, error in results:
                 if error:
-                    print(f"  Cell {cell_idx}/{len(cells)}: Failed - {error}")
+                    logger.warning(f"Cell {cell_idx}/{len(cells)}: Failed - {error}")
                     continue
 
                 if gdf is None or gdf.empty:
-                    print(f"  Cell {cell_idx}/{len(cells)}: 0 features")
+                    logger.debug(f"Cell {cell_idx}/{len(cells)}: 0 features")
                     continue
 
                 # Deduplicate features based on 'identificatie' or index
@@ -339,16 +342,15 @@ class OGCFeaturesProtocol(Protocol):
                     all_gdfs.append(gdf)
                     cell_count = len(gdf)
                     total_features += cell_count
-                    print(
-                        f"  Cell {cell_idx}/{len(cells)}: {cell_count:,} features ({total_features:,} total)",
-                        flush=True,
+                    logger.info(
+                        f"Cell {cell_idx}/{len(cells)}: {cell_count:,} features ({total_features:,} total)",
                     )
                 else:
-                    print(f"  Cell {cell_idx}/{len(cells)}: 0 new features (all duplicates)")
+                    logger.debug(f"Cell {cell_idx}/{len(cells)}: 0 new features (all duplicates)")
 
             # Check if we've reached the limit
             if limit and total_features >= limit:
-                print(f"  Reached limit of {limit:,} features, stopping...")
+                logger.info(f"Reached limit of {limit:,} features, stopping...")
                 break
 
         if not all_gdfs:
@@ -361,7 +363,7 @@ class OGCFeaturesProtocol(Protocol):
         if limit and len(combined) > limit:
             combined = combined.head(limit)
 
-        print(f"  Grid walking complete: {len(combined):,} unique features downloaded")
+        logger.info(f"Grid walking complete: {len(combined):,} unique features downloaded")
 
         return combined
 
@@ -439,7 +441,7 @@ class OGCFeaturesProtocol(Protocol):
             # Check if we know total count for progress indicator
             total_matched = geojson.get("numberMatched")
             if total_matched:
-                print(f"  Downloading {total_matched:,} features (max {page_limit} per page)...")
+                logger.info(f"Downloading {total_matched:,} features (max {page_limit} per page)...")
 
             # Determine format from first response
             is_cityjson = False
@@ -478,14 +480,12 @@ class OGCFeaturesProtocol(Protocol):
                     # Show progress
                     if total_matched:
                         progress_pct = (total_features / total_matched) * 100
-                        print(
-                            f"  Progress: {total_features:,}/{total_matched:,} ({progress_pct:.0f}%) - page {page_num}",
-                            flush=True,
+                        logger.info(
+                            f"Progress: {total_features:,}/{total_matched:,} ({progress_pct:.0f}%) - page {page_num}",
                         )
                     else:
-                        print(
-                            f"  Downloaded {total_features:,} features (page {page_num})",
-                            flush=True,
+                        logger.info(
+                            f"Downloaded {total_features:,} features (page {page_num})",
                         )
 
                 # Check if we've reached the limit
@@ -580,8 +580,8 @@ class OGCFeaturesProtocol(Protocol):
                 gdf = gdf[gdf["eind_registratie"].isna() | (gdf["eind_registratie"] == "")]
                 after_count = len(gdf)
                 if before_count != after_count:
-                    print(
-                        f"  Filtered out {before_count - after_count} terminated features (eind_registratie)"
+                    logger.info(
+                        f"Filtered out {before_count - after_count} terminated features (eind_registratie)"
                     )
 
             # Then, keep newest version per feature ID (for true duplicates with same ID)
@@ -625,7 +625,7 @@ class OGCFeaturesProtocol(Protocol):
 
             except (ValueError, AttributeError):
                 # Invalid date format - fall back to 'latest'
-                print(f"Warning: Invalid temporal date '{temporal}', using 'latest' instead")
+                logger.warning(f"Invalid temporal date '{temporal}', using 'latest' instead")
                 return self._apply_temporal_filter(gdf, "latest")
 
         return gdf

@@ -4,12 +4,15 @@ Supports WFS 2.0 for downloading vector features.
 Used by PDOK services like BAG and BRK that don't support OGC API Features yet.
 """
 
+import logging
 from typing import Any, Optional
 
 import geopandas as gpd
 import httpx
 
 from giskit.protocols.base import Protocol
+
+logger = logging.getLogger(__name__)
 
 
 class WFSError(Exception):
@@ -97,7 +100,7 @@ class WFSProtocol(Protocol):
                     gdf["_collection"] = layer_name.split(":")[-1]  # Remove namespace
                     all_gdfs.append(gdf)
             except Exception as e:
-                print(f"Warning: Failed to download {layer_name}: {e}")
+                logger.warning(f"Failed to download {layer_name}: {e}")
 
         if not all_gdfs:
             return gpd.GeoDataFrame()

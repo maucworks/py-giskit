@@ -1,8 +1,9 @@
 """IFC exporter for GeoPackage data.
 
-Exports GeoPackage layers to IFC format with YAML-configured colors and materials.
+Exports GeoPackage layers to YAML-configured colors and materials.
 """
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -14,6 +15,8 @@ import ifcopenshell.api.owner.settings as owner_settings
 from .layer_exporter import LayerExporter
 from .materials import MaterialsManager
 from .schema_adapter import get_schema_adapter
+
+logger = logging.getLogger(__name__)
 
 
 class IFCExporter:
@@ -118,7 +121,7 @@ class IFCExporter:
             ref_x: Reference point X (auto-detect if None)
             ref_y: Reference point Y (auto-detect if None)
         """
-        print(f"Exporting to IFC: {output_path}")
+        logger.info(f"Exporting to IFC: {output_path}")
 
         # Set reference point
         if ref_x is not None and ref_y is not None:
@@ -128,8 +131,8 @@ class IFCExporter:
             # Auto-detect from first feature's centroid
             self.ref_x, self.ref_y = self._auto_detect_reference_point(db_path, layers)
 
-        print(f"  Reference point: ({self.ref_x:.2f}, {self.ref_y:.2f})")
-        print(f"  Z-normalization: {'enabled' if normalize_z else 'disabled'}")
+        logger.info(f"Reference point: ({self.ref_x:.2f}, {self.ref_y:.2f})")
+        logger.info(f"Z-normalization: {'enabled' if normalize_z else 'disabled'}")
 
         # Create IFC structure (Site always at 0,0,0 with IfcMapConversion)
         self._create_project(site_name)
@@ -148,14 +151,14 @@ class IFCExporter:
             layer for layer in layers if self.materials.get_layer_config(layer) is not None
         ]
 
-        print(f"  Exporting {len(supported_layers)} layer(s)...")
+        logger.info(f"Exporting {len(supported_layers)} layer(s)...")
 
         # Statistics
         total_stats: Dict[str, int] = {}
 
         # Export each layer
         for layer in supported_layers:
-            print(f"    - {layer}...")
+            logger.info(f"  - {layer}...")
 
             try:
                 stats = self.layer_exporter.export(
@@ -172,21 +175,21 @@ class IFCExporter:
                 # Accumulate stats
                 for key, count in stats.items():
                     total_stats[key] = total_stats.get(key, 0) + count
-                print(f"      ✓ Exported {sum(stats.values())} entities")
+                logger.info(f"    ✓ Exported {sum(stats.values())} entities")
             except Exception as e:
-                print(f"      ✗ Error: {e}")
+                logger.error(f"    ✗ Error: {e}")
                 import traceback
 
                 traceback.print_exc()
 
         # Write IFC file
         self.ifc.write(str(output_path))
-        print(f"✓ Exported to {output_path}")
+        logger.info(f"Exported to {output_path}")
 
         # Print statistics
-        print(f"  Total entities: {sum(total_stats.values())}")
+        logger.info(f"Total entities: {sum(total_stats.values())}")
         for entity_type, count in sorted(total_stats.items()):
-            print(f"    - {entity_type}: {count}")
+            logger.info(f"  - {entity_type}: {count}")
 
     def _create_project(self, site_name: str) -> None:
         """Create IFC Project with metadata."""
@@ -318,7 +321,7 @@ class IFCExporter:
             layers = fiona.listlayers(str(db_path))
             return layers
         except Exception as e:
-            print(f"Warning: Could not list layers: {e}")
+            logger.warning(f"Could not list layers: {e}")
             return []
 
     def _auto_detect_reference_point(
@@ -345,7 +348,7 @@ class IFCExporter:
             ):
                 ref_x = float(metadata_gdf["x"].iloc[0])
                 ref_y = float(metadata_gdf["y"].iloc[0])
-                print(f"  Using reference point from _metadata: ({ref_x:.2f}, {ref_y:.2f})")
+                logger.info(f"Using reference point from _metadata: ({ref_x:.2f}, {ref_y:.2f})")
                 return (ref_x, ref_y)
         except Exception:
             # _metadata table doesn't exist or is invalid, fall back to auto-detection
@@ -495,4 +498,4 @@ class IFCExporter:
         except Exception as e:
             # If georeferencing fails, continue without it
             # (Some IFC versions might not support all attributes)
-            print(f"  Warning: Could not add IfcMapConversion: {e}")
+            logger.warning(f"Could not add IfcMapConversion: {e}")

@@ -1,6 +1,7 @@
 """Run and validate recipe commands."""
 
 import asyncio
+import logging
 import re
 from pathlib import Path
 
@@ -254,14 +255,27 @@ async def _execute_recipe(recipe: Recipe, recipe_dir: Path, console: Console, ve
 @click.argument("recipe_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--dry-run", is_flag=True, help="Validate without downloading")
-def run(recipe_path: Path, verbose: bool, dry_run: bool) -> None:
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False),
+    default="WARNING",
+    help="Set logging level (default: WARNING)",
+)
+def run(recipe_path: Path, verbose: bool, dry_run: bool, log_level: str) -> None:
     """Run a recipe to download spatial data.
 
     Examples:
         giskit run amsterdam.json
         giskit run --dry-run test.json
         giskit run --verbose utrecht.json
+        giskit run --log-level INFO amsterdam.json
     """
+    # Configure logging
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format="%(levelname)s: %(message)s",
+    )
+    
     try:
         # Load recipe
         with console.status("[bold green]Loading recipe..."):
