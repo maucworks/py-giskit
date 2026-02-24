@@ -10,6 +10,11 @@ from urllib.parse import urljoin
 import geopandas as gpd
 import httpx
 
+from giskit.core.constants import (
+    DEFAULT_GRID_CELL_SIZE_M,
+    MIN_GRID_WALKING_AREA_M2,
+    OGC_FEATURES_DEFAULT_LIMIT,
+)
 from giskit.protocols.base import Protocol
 from giskit.protocols.quirks import ProtocolQuirks
 
@@ -27,7 +32,7 @@ class OGCFeaturesProtocol(Protocol):
         self,
         base_url: str,
         timeout: float = 30.0,
-        max_features_per_request: int = 10000,
+        max_features_per_request: int = OGC_FEATURES_DEFAULT_LIMIT,
         quirks: Optional[ProtocolQuirks] = None,
         **kwargs: Any,
     ):
@@ -160,12 +165,11 @@ class OGCFeaturesProtocol(Protocol):
             height = request_bbox[3] - request_bbox[1]
             area = width * height  # in square meters for metric CRS
 
-            # Use grid walking if area > 0.5 km² (500m x 500m)
+            # Use grid walking if area exceeds threshold
             # This helps especially for BAG3D which has max 100 features per request
-            if area > 500 * 500:
+            if area > MIN_GRID_WALKING_AREA_M2:
                 use_grid_walking = True
-                # Use 250m grid cells - small enough to avoid limits, large enough to be efficient
-                grid_cell_size = 250.0  # meters
+                grid_cell_size = DEFAULT_GRID_CELL_SIZE_M
 
         # Download each collection
         all_gdfs = []

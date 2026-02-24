@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
+from giskit.core.constants import BGT_ALL_LAYERS_THRESHOLD
 from giskit.core.recipe import Recipe
 
 console = Console()
@@ -230,7 +231,7 @@ async def _execute_recipe(recipe: Recipe, recipe_dir: Path, console: Console, ve
         # Store BGT layers (or "all" if many layers)
         if bgt_layers_list:
             # Sitedb uses "all" if all BGT layers are included
-            if len(bgt_layers_list) > 40:  # Heuristic: if many layers, assume "all"
+            if len(bgt_layers_list) > BGT_ALL_LAYERS_THRESHOLD:
                 metadata_dict["bgt_layers"] = ["all"]
             else:
                 metadata_dict["bgt_layers"] = [",".join(sorted(bgt_layers_list))]

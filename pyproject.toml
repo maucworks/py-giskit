@@ -98,9 +98,8 @@ select = [
     "B",   # flake8-bugbear
 ]
 ignore = [
-    "E501",  # line too long (handled by black)
+    "E501",  # line too long (handled by formatter)
     "B008",  # do not perform function calls in argument defaults
-    "B904",  # raise ... from err (not critical for this codebase)
     "C901",  # too complex
     "E402",  # module level import not at top of file (needed for lazy loading)
     "E722",  # bare except (sometimes needed for backwards compat)

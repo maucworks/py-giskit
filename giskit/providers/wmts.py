@@ -28,6 +28,12 @@ from typing import Any
 
 import geopandas as gpd
 
+from giskit.core.constants import (
+    JPEG_EXPORT_QUALITY,
+    JPEG_OPTIMIZE,
+    WMTS_DEFAULT_RESOLUTION_M,
+)
+
 from giskit.config import load_services
 from giskit.core.recipe import Dataset, Location
 from giskit.protocols.wmts import WMTSProtocol
@@ -190,7 +196,7 @@ class WMTSProvider(Provider):
             image = await protocol.get_coverage(
                 bbox=bbox,  # type: ignore
                 product=layer_key,
-                resolution=resolution or 0.25,  # Default to 25cm
+                resolution=resolution or WMTS_DEFAULT_RESOLUTION_M,
                 crs=output_crs,
                 zoom=zoom,
                 progress_callback=progress_callback,
@@ -211,14 +217,24 @@ class WMTSProvider(Provider):
 
             # Determine format from extension or use service config
             if output_path.suffix.lower() in [".jpg", ".jpeg"]:
-                image.save(str(output_path), format="JPEG", quality=90, optimize=True)
+                image.save(
+                    str(output_path),
+                    format="JPEG",
+                    quality=JPEG_EXPORT_QUALITY,
+                    optimize=JPEG_OPTIMIZE,
+                )
             elif output_path.suffix.lower() == ".png":
                 image.save(str(output_path), format="PNG", optimize=True)
             elif output_path.suffix.lower() == ".tif":
                 image.save(str(output_path), format="TIFF")
             else:
                 # Default to JPEG
-                image.save(str(output_path), format="JPEG", quality=90, optimize=True)
+                image.save(
+                    str(output_path),
+                    format="JPEG",
+                    quality=JPEG_EXPORT_QUALITY,
+                    optimize=JPEG_OPTIMIZE,
+                )
 
         # WMTS returns images, not vector data
         # Return empty GeoDataFrame for now
