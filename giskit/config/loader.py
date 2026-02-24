@@ -26,8 +26,9 @@ Usage:
 from pathlib import Path
 from typing import Any, Optional
 
-import yaml
 from pydantic import BaseModel, Field, ValidationError
+
+from giskit.config.yaml_utils import load_yaml_safe, save_yaml_safe
 
 # Config file locations
 DEFAULT_CONFIG_DIR = Path(__file__).parent.parent / "config"
@@ -239,24 +240,22 @@ def load_services(
 
     # Try to load from file
     if file_path.exists():
-        try:
-            with open(file_path) as f:
-                data = yaml.safe_load(f)
+        data = load_yaml_safe(file_path)
 
+        if data is None:
+            # YAML loading failed
+            if fallback is not None:
+                print(f"⚠️  Failed to load YAML from {file_path}, using fallback...")
+                return fallback
+            raise ValueError(f"Failed to load YAML from {file_path}")
+
+        try:
             # Validate and parse
             config = ServicesConfig(**data)
             return config.get_services_dict()
 
         except ValidationError as e:
             print(f"⚠️  Config validation error in {file_path}:")
-            print(f"   {e}")
-            if fallback is not None:
-                print("   Using fallback...")
-                return fallback
-            raise
-
-        except Exception as e:
-            print(f"⚠️  Error loading config from {file_path}:")
             print(f"   {e}")
             if fallback is not None:
                 print("   Using fallback...")
@@ -299,10 +298,15 @@ def load_quirks(
         file_path = config_dir / f"{quirk_type}.yml"
 
         if file_path.exists():
-            try:
-                with open(file_path) as f:
-                    data = yaml.safe_load(f)
+            data = load_yaml_safe(file_path)
 
+            if data is None:
+                print(f"⚠️  Failed to load YAML from {file_path}")
+                if fallback:
+                    return fallback
+                continue
+
+            try:
                 # Handle services differently (nested structure)
                 if quirk_type == "services":
                     # data is like: {"services": {"bag3d": {"ogc-features": {...}}}}
@@ -340,7 +344,7 @@ def load_quirks(
                         all_quirks[provider_id][protocol_id] = quirk_def.to_protocol_quirks()
 
             except Exception as e:
-                print(f"⚠️  Error loading quirks from {file_path}: {e}")
+                print(f"⚠️  Error parsing quirks from {file_path}: {e}")
                 if fallback:
                     return fallback
 
@@ -396,9 +400,8 @@ def save_services(
     # Convert to dict and write YAML
     output_data = config.model_dump(exclude_none=True, exclude_defaults=False)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        yaml.dump(output_data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    if not save_yaml_safe(output_data, output_path, sort_keys=False):
+        raise IOError(f"Failed to write YAML to {output_path}")
 
     return output_path
 
@@ -459,9 +462,8 @@ def save_quirks(
     # Convert to dict and write YAML
     output_data = config.model_dump(exclude_none=True, exclude_defaults=True)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        yaml.dump(output_data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    if not save_yaml_safe(output_data, output_path, sort_keys=False):
+        raise IOError(f"Failed to write YAML to {output_path}")
 
     return output_path
 

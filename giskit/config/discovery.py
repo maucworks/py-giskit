@@ -8,7 +8,7 @@ Discovers providers from two formats:
 from pathlib import Path
 from typing import Any
 
-import yaml
+from giskit.config.yaml_utils import load_yaml_safe
 
 
 def discover_providers(config_dir: Path | None = None) -> dict[str, dict[str, Any]]:
@@ -55,29 +55,24 @@ def discover_providers(config_dir: Path | None = None) -> dict[str, dict[str, An
 
         provider_name = config_file.stem  # e.g., "pdok" from "pdok.yml"
 
-        try:
-            with open(config_file) as f:
-                config_data = yaml.safe_load(f)
+        config_data = load_yaml_safe(config_file)
 
-            if not config_data or "provider" not in config_data or "services" not in config_data:
-                continue  # Not a valid provider config
+        if not config_data or "provider" not in config_data or "services" not in config_data:
+            continue  # Not a valid provider config
 
-            # Detect protocols used in services
-            protocols = set()
-            for service_config in config_data["services"].values():
-                if "protocol" in service_config:
-                    protocols.add(service_config["protocol"])
+        # Detect protocols used in services
+        protocols = set()
+        for service_config in config_data["services"].values():
+            if "protocol" in service_config:
+                protocols.add(service_config["protocol"])
 
-            discovered[provider_name] = {
-                "format": "unified",
-                "config_file": config_file,
-                "protocols": sorted(protocols),
-                "metadata": config_data.get("provider", {}),
-                "base_name": provider_name,
-            }
-        except Exception:
-            # Invalid config, skip
-            continue
+        discovered[provider_name] = {
+            "format": "unified",
+            "config_file": config_file,
+            "protocols": sorted(protocols),
+            "metadata": config_data.get("provider", {}),
+            "base_name": provider_name,
+        }
 
     # Second: Check for legacy split format (directories with protocol files)
     for provider_path in providers_dir.iterdir():
@@ -94,8 +89,7 @@ def discover_providers(config_dir: Path | None = None) -> dict[str, dict[str, An
         metadata_file = provider_path / "provider.yml"
         metadata = {}
         if metadata_file.exists():
-            with open(metadata_file) as f:
-                metadata = yaml.safe_load(f) or {}
+            metadata = load_yaml_safe(metadata_file) or {}
 
         # Check for protocol config files
         protocol_files = {
