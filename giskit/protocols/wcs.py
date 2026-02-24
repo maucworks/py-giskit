@@ -121,7 +121,7 @@ class WCSProtocol(Protocol):
             }
 
         except httpx.HTTPError as e:
-            raise WCSError(f"Failed to get capabilities: {e}")
+            raise WCSError(f"Failed to get capabilities: {e}") from e
 
     async def describe_coverage(self) -> dict[str, Any]:
         """Describe coverage metadata.
@@ -169,7 +169,7 @@ class WCSProtocol(Protocol):
             return metadata
 
         except httpx.HTTPError as e:
-            raise WCSError(f"Failed to describe coverage: {e}")
+            raise WCSError(f"Failed to describe coverage: {e}") from e
 
     async def get_features(
         self,
@@ -292,7 +292,7 @@ class WCSProtocol(Protocol):
             return data
 
         except httpx.HTTPError as e:
-            raise WCSError(f"Failed to download coverage: {e}")
+            raise WCSError(f"Failed to download coverage: {e}") from e
 
     async def save_coverage_as_geotiff(
         self,
