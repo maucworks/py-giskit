@@ -1,7 +1,7 @@
 """
 Schema adapters for different IFC versions.
 
-Provides abstraction layer for schema-specific differences (IFC4 vs IFC4X3).
+Provides abstraction layer for schema-specific differences (IFC2X3, IFC4, IFC4X3).
 """
 from typing import Any, Tuple
 
@@ -104,6 +104,39 @@ class IFC4X3Adapter(SchemaAdapter):
         return railway, "aggregate"
 
 
+class IFC2X3Adapter(SchemaAdapter):
+    """Adapter for IFC2X3 schema.
+
+    IFC2X3 lacks civil infrastructure entities (IfcRoad, IfcBridge, IfcRailway)
+    and IfcCivilElement/IfcGeographicElement. We use IfcBuildingElementProxy
+    with ObjectType for classification.
+    """
+
+    def create_road(self, name: str) -> Tuple[Any, str]:
+        """Create road as IfcBuildingElementProxy in IFC2X3."""
+        road = ifcopenshell.api.run(
+            "root.create_entity", self.ifc, ifc_class="IfcBuildingElementProxy", name=name
+        )
+        road.ObjectType = "Road"
+        return road, "container"
+
+    def create_bridge(self, name: str) -> Tuple[Any, str]:
+        """Create bridge as IfcBuildingElementProxy in IFC2X3."""
+        bridge = ifcopenshell.api.run(
+            "root.create_entity", self.ifc, ifc_class="IfcBuildingElementProxy", name=name
+        )
+        bridge.ObjectType = "Bridge"
+        return bridge, "container"
+
+    def create_railway(self, name: str) -> Tuple[Any, str]:
+        """Create railway as IfcBuildingElementProxy in IFC2X3."""
+        railway = ifcopenshell.api.run(
+            "root.create_entity", self.ifc, ifc_class="IfcBuildingElementProxy", name=name
+        )
+        railway.ObjectType = "Railway"
+        return railway, "container"
+
+
 def get_schema_adapter(ifc_file: Any) -> SchemaAdapter:
     """Get appropriate schema adapter for IFC file.
 
@@ -120,6 +153,6 @@ def get_schema_adapter(ifc_file: Any) -> SchemaAdapter:
     elif schema == "IFC4":
         return IFC4Adapter(ifc_file)
     elif schema == "IFC2X3":
-        return IFC4Adapter(ifc_file)  # IFC2X3 similar to IFC4 for civil elements
+        return IFC2X3Adapter(ifc_file)
     else:
         raise ValueError(f"Unsupported IFC schema: {schema}")

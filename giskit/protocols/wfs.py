@@ -120,7 +120,7 @@ class WFSProtocol(Protocol):
         Args:
             client: HTTP client
             layer_name: Layer/typeName to download
-            bbox: Bounding box
+            bbox: Bounding box in target CRS
             crs: Target CRS
             limit: Feature limit
 
@@ -128,7 +128,8 @@ class WFSProtocol(Protocol):
             GeoDataFrame with features
         """
         # Build WFS GetFeature request
-        bbox_str = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
+        # WFS 2.0 spec: bbox should include CRS: minx,miny,maxx,maxy,CRS
+        bbox_str = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},{crs}"
         params = {
             "service": "WFS",
             "version": "2.0.0",

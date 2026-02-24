@@ -154,6 +154,15 @@ class MultiProtocolProvider(Provider):
         service_config = self.services[dataset.service]
         protocol_name = service_config.get("protocol", "ogc-features")
 
+        # Check if protocol requires specialized provider
+        if protocol_name in ("wcs", "wmts"):
+            provider_suffix = f"-{protocol_name}"
+            raise NotImplementedError(
+                f"Service '{dataset.service}' uses {protocol_name.upper()} protocol which requires "
+                f"a specialized provider. Please use 'provider: {self.name}{provider_suffix}' "
+                f"instead of 'provider: {self.name}' in your recipe."
+            )
+
         # Get or create protocol handler
         protocol = self.get_protocol(protocol_name)
         if protocol is None:

@@ -184,10 +184,25 @@ class IFCExportConfig(BaseModel):
         - RD reference point also stored in properties for backward compatibility
         - BIM tools (Blender/Bonsai) can use IfcMapConversion to position model correctly
 
+    IFC Versions:
+        - IFC4X3_ADD2: Latest version with civil infrastructure support (IfcRoad, etc.)
+        - IFC4: Standard IFC4 with IfcCivilElement fallback
+        - IFC2X3: Legacy version with IfcBuildingElementProxy fallback
+
+    Multiple IFC Versions:
+        - Use ifc_versions to export to multiple IFC versions simultaneously
+        - Each version creates a separate file: name_IFCVERSION.ifc
+        - Example: {"path": "output.ifc", "ifc_versions": ["IFC4X3_ADD2", "IFC4"]}
+        - Creates: output_IFC4X3_ADD2.ifc, output_IFC4.ifc
+
     GLB Export (Optional):
         - If glb_path is specified, will also export to GLB after IFC creation
         - GLB is created from IFC using IfcConvert (requires ifcopenshell)
         - GLB is ideal for web viewers (Three.js, Cesium, etc.)
+
+    OBJ ZIP Export (Optional):
+        - If obj_zip_path is specified, will export to OBJ ZIP after IFC creation
+        - Creates a ZIP with OBJ+MTL files per layer
 
     Color Overrides:
         - Use layer_colors to override default colors per layer
@@ -200,8 +215,19 @@ class IFCExportConfig(BaseModel):
         Export to IFC only:
             {"path": "output.ifc"}
 
-        Export to both IFC and GLB:
-            {"path": "output.ifc", "glb_path": "output.glb"}
+        Export with specific IFC version:
+            {"path": "output.ifc", "ifc_version": "IFC4"}
+
+        Export to multiple IFC versions:
+            {"path": "output.ifc", "ifc_versions": ["IFC4X3_ADD2", "IFC4", "IFC2X3"]}
+            # Creates: output_IFC4X3_ADD2.ifc, output_IFC4.ifc, output_IFC2X3.ifc
+
+        Export to IFC + GLB + OBJ:
+            {
+                "path": "output.ifc",
+                "glb_path": "output.glb",
+                "obj_zip_path": "output_obj.zip"
+            }
 
         Export with absolute NAP elevations:
             {"path": "output.ifc", "normalize_z": false}
@@ -218,6 +244,13 @@ class IFCExportConfig(BaseModel):
     path: Path = Field(..., description="Output IFC file path")
     ifc_version: str = Field(
         "IFC4X3_ADD2", description="IFC schema version (IFC4X3_ADD2, IFC4, IFC2X3)"
+    )
+    ifc_versions: Optional[list[str]] = Field(
+        None,
+        description=(
+            "Export to multiple IFC versions. Creates separate files: name_IFCVERSION.ifc. "
+            "Valid versions: IFC4X3_ADD2, IFC4, IFC2X3"
+        ),
     )
     site_name: Optional[str] = Field(
         None, description="Name for the IFC site (default: use address)"
@@ -257,6 +290,21 @@ class IFCExportConfig(BaseModel):
         if v.suffix.lower() != ".ifc":
             v = v.with_suffix(".ifc")
         return Path(v)
+
+    @field_validator("ifc_versions")
+    @classmethod
+    def validate_ifc_versions(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        """Validate IFC version list."""
+        if v is None:
+            return None
+        valid_versions = {"IFC4X3_ADD2", "IFC4", "IFC2X3"}
+        for version in v:
+            if version not in valid_versions:
+                raise ValueError(
+                    f"Invalid IFC version '{version}'. "
+                    f"Valid versions: {', '.join(sorted(valid_versions))}"
+                )
+        return v
 
 
 class Output(BaseModel):

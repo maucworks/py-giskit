@@ -200,14 +200,33 @@ class MaterialsManager:
 
         Args:
             layer_name: Name of the GeoPackage layer
-            ifc_schema: IFC schema version (e.g., 'IFC4', 'IFC4X3')
+            ifc_schema: IFC schema version (e.g., 'IFC2X3', 'IFC4', 'IFC4X3')
 
         Returns:
             IFC class name
         """
         layer_config = self.get_layer_config(layer_name)
 
-        # Check for schema-specific fallback
+        # IFC2X3 fallback - lacks IfcCivilElement, IfcGeographicElement, etc.
+        if ifc_schema == "IFC2X3":
+            # Check for explicit IFC2X3 fallback in config
+            if "ifc_class_ifc2x3" in layer_config:
+                return layer_config["ifc_class_ifc2x3"]
+
+            ifc_class = layer_config.get("ifc_class", "IfcBuildingElementProxy")
+            # Map IFC4+ entities to IFC2X3 equivalents
+            ifc4_only_classes = {
+                "IfcCivilElement",
+                "IfcGeographicElement",
+                "IfcRoad",
+                "IfcBridge",
+                "IfcRailway",
+            }
+            if ifc_class in ifc4_only_classes:
+                return "IfcBuildingElementProxy"
+            return ifc_class
+
+        # IFC4 fallback
         if ifc_schema == "IFC4" and "ifc_class_fallback" in layer_config:
             return layer_config["ifc_class_fallback"]
 

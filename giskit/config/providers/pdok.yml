@@ -26,23 +26,26 @@ services:
     quirks: []
     protocol: ogc-features
   bag:
-    url: https://api.pdok.nl/lv/bag/ogc/v1_0/
-    title: Basisregistratie Adressen en Gebouwen
+    url: https://api.pdok.nl/kadaster/bag/ogc/v2
+    title: Basisregistratie Adressen en Gebouwen (OGC API v2)
     category: base_registers
-    description: National address and building register
+    description: National address and building register (OGC API Features v2, released Jan 2026)
     keywords:
     - bag
     - adressen
     - gebouwen
     - panden
     - verblijfsobjecten
+    - adres
     quirks: []
     protocol: ogc-features
+    # Note: Previous v1 endpoint (https://api.pdok.nl/lv/bag/ogc/v1_0/) will be deprecated on July 15, 2026
+    # New in v2: 'adres' collection with point geometry for complete addresses
   brk:
     url: https://api.pdok.nl/lv/brk/ogc/v1_0/
-    title: Basisregistratie Kadaster - Kadastrale Kaart
+    title: Basisregistratie Kadaster - Kadastrale Kaart (DEPRECATED)
     category: base_registers
-    description: Cadastral map with parcel boundaries
+    description: Cadastral map with parcel boundaries (OGC Features API discontinued - use brk-percelen-wfs instead)
     keywords:
     - brk
     - kadaster
@@ -50,6 +53,23 @@ services:
     - eigendom
     quirks: []
     protocol: ogc-features
+    # Note: This service is no longer available (404). Use brk-percelen-wfs instead.
+  brk-percelen-wfs:
+    url: https://service.pdok.nl/kadaster/brk-kadastrale-percelen/wfs/v1_0
+    title: BRK Kadastrale Percelen (WFS)
+    category: base_registers
+    description: Cadastral parcels via WFS (recommended - OGC Features API discontinued)
+    keywords:
+    - brk
+    - kadaster
+    - percelen
+    - cadastral
+    - parcels
+    - eigendom
+    quirks: []
+    protocol: wfs
+    layers:
+      perceel: cp:cadastralparcel
   3d-basisvoorziening:
     url: https://api.pdok.nl/kadaster/3d-basisvoorziening/ogc/v1
     title: 3D Basisvoorziening

@@ -29,11 +29,12 @@ def _normalize_layer_name(name: str) -> str:
     return s2.lower()
 
 
-async def _execute_recipe(recipe: Recipe, console: Console, verbose: bool):
+async def _execute_recipe(recipe: Recipe, recipe_dir: Path, console: Console, verbose: bool):
     """Execute a recipe asynchronously.
 
     Args:
         recipe: Recipe to execute
+        recipe_dir: Directory containing the recipe file (for resolving relative paths)
         console: Rich console for output
         verbose: Verbose logging
 
@@ -48,6 +49,11 @@ async def _execute_recipe(recipe: Recipe, console: Console, verbose: bool):
 
     if verbose:
         console.print(f"  BBox (WGS84): {bbox}")
+
+    # Resolve output path relative to recipe directory if it's relative
+    output_path = recipe.output.path
+    if not output_path.is_absolute():
+        output_path = recipe_dir / output_path
 
     # Download each dataset - store as separate layers
     layers = {}
@@ -78,7 +84,7 @@ async def _execute_recipe(recipe: Recipe, console: Console, verbose: bool):
                 gdf = await provider.download_dataset(
                     dataset=dataset,
                     location=bbox_location,
-                    output_path=recipe.output.path,
+                    output_path=output_path,
                     output_crs=recipe.output.crs,
                 )
 
@@ -295,11 +301,14 @@ def run(recipe_path: Path, verbose: bool, dry_run: bool) -> None:
 
         try:
             # Run async download - returns dict of layer_name -> GeoDataFrame
-            layers = asyncio.run(_execute_recipe(recipe, console, verbose))
+            layers = asyncio.run(_execute_recipe(recipe, recipe_path.parent, console, verbose))
 
             # Save to output file
             if layers is not None and len(layers) > 0:
+                # Resolve output path relative to recipe directory if it's relative
                 output_path = recipe.output.path
+                if not output_path.is_absolute():
+                    output_path = recipe_path.parent / output_path
                 output_format = recipe.output.format.value
 
                 with console.status(f"[bold green]Saving to {output_path}..."):
@@ -514,37 +523,63 @@ def run(recipe_path: Path, verbose: bool, dry_run: bool) -> None:
 
                             console.print(f"\nConverted {total_features} features to IFC format...")
 
-                            # Export to IFC
-                            exporter = IFCExporter(
-                                ifc_version=recipe.output.ifc_export.ifc_version
-                                if recipe.output.ifc_export
-                                else "IFC4X3_ADD2",
-                                author="GISKit",
-                                organization="A190",
-                                color_overrides=recipe.output.ifc_export.layer_colors
-                                if recipe.output.ifc_export
-                                else None,
-                            )
+                            # Determine IFC versions to export
+                            ifc_versions: list[str] = []
+                            if recipe.output.ifc_export and recipe.output.ifc_export.ifc_versions:
+                                ifc_versions = recipe.output.ifc_export.ifc_versions
+                            else:
+                                ifc_versions = [
+                                    recipe.output.ifc_export.ifc_version
+                                    if recipe.output.ifc_export
+                                    else "IFC4X3_ADD2"
+                                ]
 
-                            exporter.export(
-                                db_path=tmp_path,
-                                output_path=output_path,
-                                layers=None,
-                                normalize_z=recipe.output.ifc_export.normalize_z
-                                if recipe.output.ifc_export
-                                else True,
-                                site_name=recipe.output.ifc_export.site_name
-                                if recipe.output.ifc_export and recipe.output.ifc_export.site_name
-                                else "Site",
-                            )
+                            # Export each IFC version
+                            for ifc_version in ifc_versions:
+                                # Determine output path for this version
+                                if len(ifc_versions) > 1:
+                                    # Multiple versions: output_IFC4X3_ADD2.ifc
+                                    versioned_path = output_path.with_stem(
+                                        f"{output_path.stem}_{ifc_version}"
+                                    )
+                                else:
+                                    versioned_path = output_path
+
+                                console.print(f"  Exporting to {ifc_version}...")
+
+                                exporter = IFCExporter(
+                                    ifc_version=ifc_version,
+                                    author="GISKit",
+                                    organization="A190",
+                                    color_overrides=recipe.output.ifc_export.layer_colors
+                                    if recipe.output.ifc_export
+                                    else None,
+                                )
+
+                                exporter.export(
+                                    db_path=tmp_path,
+                                    output_path=versioned_path,
+                                    layers=None,
+                                    normalize_z=recipe.output.ifc_export.normalize_z
+                                    if recipe.output.ifc_export
+                                    else True,
+                                    site_name=recipe.output.ifc_export.site_name
+                                    if recipe.output.ifc_export
+                                    and recipe.output.ifc_export.site_name
+                                    else "Site",
+                                )
+
+                                console.print(
+                                    f"[bold green]✓[/bold green] Exported to {versioned_path}"
+                                )
+
+                                if versioned_path.exists():
+                                    size_mb = versioned_path.stat().st_size / (1024 * 1024)
+                                    console.print(f"  Size: {size_mb:.1f} MB")
 
                             console.print(
-                                f"[bold green]✓[/bold green] Successfully exported {total_features} features to {output_path}"
+                                f"[bold green]✓[/bold green] Successfully exported {total_features} features"
                             )
-
-                            if output_path.exists():
-                                size_mb = output_path.stat().st_size / (1024 * 1024)
-                                console.print(f"  Size: {size_mb:.1f} MB")
 
                         finally:
                             # Clean up temp file

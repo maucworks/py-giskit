@@ -19,17 +19,19 @@ services:
     - water
     quirks: []
   bag:
-    url: https://api.pdok.nl/lv/bag/ogc/v1_0/
-    title: Basisregistratie Adressen en Gebouwen
+    url: https://api.pdok.nl/kadaster/bag/ogc/v2
+    title: Basisregistratie Adressen en Gebouwen (OGC API v2)
     category: base_registers
-    description: National address and building register
+    description: National address and building register (OGC API Features v2, released Jan 2026)
     keywords:
     - bag
     - adressen
     - gebouwen
     - panden
     - verblijfsobjecten
+    - adres
     quirks: []
+    # Note: v1 endpoint deprecated July 15, 2026
   brk:
     url: https://api.pdok.nl/lv/brk/ogc/v1_0/
     title: Basisregistratie Kadaster - Kadastrale Kaart

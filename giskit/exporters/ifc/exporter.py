@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import ifcopenshell
 import ifcopenshell.api
+import ifcopenshell.api.owner.settings as owner_settings
 
 from .layer_exporter import LayerExporter
 from .materials import MaterialsManager
@@ -42,6 +43,9 @@ class IFCExporter:
         self.author = author
         self.organization = organization
 
+        # Setup owner history BEFORE any API calls (required for ifcopenshell)
+        self._setup_owner_history()
+
         # Materials manager - create with color overrides
         if materials_manager:
             self.materials = materials_manager
@@ -62,6 +66,28 @@ class IFCExporter:
         # Reference point (will be set from metadata or first feature)
         self.ref_x: float = 0.0
         self.ref_y: float = 0.0
+
+    def _setup_owner_history(self) -> None:
+        """Setup owner history for ifcopenshell API.
+
+        Required before any ifcopenshell.api.run() calls in newer versions.
+        This registers the default user and application for the API to use.
+        """
+        # Create entities for owner history
+        person = self.ifc.createIfcPerson(None, self.author, None, None, None, None, None, None)
+        organization = self.ifc.createIfcOrganization(None, self.organization, None, None, None)
+        person_and_org = self.ifc.createIfcPersonAndOrganization(person, organization, None)
+        application = self.ifc.createIfcApplication(
+            organization, "1.0", "GISKit IFC Exporter", "GISKit"
+        )
+
+        # Store for later use
+        self._person_and_org = person_and_org
+        self._application = application
+
+        # Register as default for API calls
+        owner_settings.get_user = lambda file: person_and_org
+        owner_settings.get_application = lambda file: application
 
     def export(
         self,
@@ -242,6 +268,11 @@ class IFCExporter:
         # IfcMapConversion handles transformation to RD coordinates
         site_x, site_y, site_z = 0.0, 0.0, 0.0
 
+        # CompositionType is required for IFC2X3, optional for IFC4+
+        # Use "ELEMENT" which means the site is not decomposed
+        schema_version = self.ifc.schema
+        composition_type = "ELEMENT" if schema_version == "IFC2X3" else None
+
         # Set site location
         # NOTE: Geometry coordinates are ALWAYS relative to this placement
         site_location = self.ifc.createIfcSite(
@@ -258,7 +289,7 @@ class IFCExporter:
             ),
             None,  # Representation
             None,  # LongName
-            None,  # CompositionType
+            composition_type,  # CompositionType (required for IFC2X3)
             None,  # RefLatitude
             None,  # RefLongitude
             None,  # RefElevation
@@ -364,9 +395,12 @@ class IFCExporter:
             ),
         ]
 
+        # Get owner history for IFC2X3 (required) or None for IFC4+
+        owner_history = self._get_owner_history()
+
         property_set = self.ifc.createIfcPropertySet(
             ifcopenshell.guid.new(),
-            None,  # OwnerHistory
+            owner_history,
             "RD_Georeference",
             "Rijksdriehoek (Amersfoort RD New) reference point",
             property_values,
@@ -375,12 +409,37 @@ class IFCExporter:
         # Attach to site
         self.ifc.createIfcRelDefinesByProperties(
             ifcopenshell.guid.new(),
-            None,  # OwnerHistory
+            owner_history,
             "RD Reference",
             None,  # Description
             [self.site],
             property_set,
         )
+
+    def _get_owner_history(self) -> Any:
+        """Get or create owner history for IFC entities.
+
+        Returns:
+            OwnerHistory entity for IFC2X3 (required), None for IFC4+ (optional)
+        """
+        schema_version = self.ifc.schema
+
+        # IFC4+ doesn't require OwnerHistory
+        if schema_version != "IFC2X3":
+            return None
+
+        # IFC2X3 requires OwnerHistory - create one using stored person/org/app
+        owner_history = self.ifc.createIfcOwnerHistory(
+            self._person_and_org,
+            self._application,
+            None,  # State
+            "ADDED",  # ChangeAction
+            None,  # LastModifiedDate
+            None,  # LastModifyingUser
+            None,  # LastModifyingApplication
+            int(datetime.now().timestamp()),  # CreationDate
+        )
+        return owner_history
 
     def _add_georeferencing(self) -> None:
         """Add IFC4+ georeferencing using IfcMapConversion and IfcProjectedCRS.

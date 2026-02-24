@@ -167,18 +167,18 @@ class WMTSProvider(Provider):
         protocol = self.protocols[protocol_key]
 
         # Convert location to bbox in output CRS
-        # For now, assume location is already a bbox in the correct CRS
-        # TODO: Add proper location conversion
-        if location.type.value != "bbox":
-            raise NotImplementedError(
-                f"Location type '{location.type.value}' not yet supported for WMTS. "
-                "Use bbox for now."
-            )
+        from giskit.core.spatial import location_to_bbox
 
-        if not isinstance(location.value, list) or len(location.value) != 4:
-            raise ValueError("Location value must be [minx, miny, maxx, maxy] for bbox")
+        # Get bbox in WGS84 first
+        bbox_wgs84 = await location_to_bbox(location, "EPSG:4326")
 
-        bbox = tuple(location.value)  # type: ignore
+        # Transform to output CRS if needed
+        if output_crs != "EPSG:4326":
+            from giskit.core.spatial import transform_bbox
+
+            bbox = transform_bbox(bbox_wgs84, "EPSG:4326", output_crs)
+        else:
+            bbox = bbox_wgs84
 
         # Extract WMTS-specific parameters
         zoom = kwargs.get("zoom")
@@ -198,8 +198,27 @@ class WMTSProvider(Provider):
 
         # Save if output path provided
         if output_path:
+            # WMTS returns raster images, not vector data
+            # Change extension from .gpkg to appropriate image format
+            if output_path.suffix.lower() in [".gpkg", ".geojson", ".shp"]:
+                # Replace vector format with image format, keeping the base name and directory
+                image_format = self.services[service_name].get("tile_format", "jpeg")
+                extension = ".jpg" if image_format == "jpeg" else f".{image_format}"
+                # Keep directory and base name, just change extension
+                output_path = output_path.parent / (output_path.stem + "_aerial" + extension)
+
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            image.save(output_path, quality=90, optimize=True)
+
+            # Determine format from extension or use service config
+            if output_path.suffix.lower() in [".jpg", ".jpeg"]:
+                image.save(str(output_path), format="JPEG", quality=90, optimize=True)
+            elif output_path.suffix.lower() == ".png":
+                image.save(str(output_path), format="PNG", optimize=True)
+            elif output_path.suffix.lower() == ".tif":
+                image.save(str(output_path), format="TIFF")
+            else:
+                # Default to JPEG
+                image.save(str(output_path), format="JPEG", quality=90, optimize=True)
 
         # WMTS returns images, not vector data
         # Return empty GeoDataFrame for now
@@ -286,3 +305,6 @@ class WMTSProvider(Provider):
 
 # Register WMTS provider globally
 register_provider("wmts", WMTSProvider)
+
+# Register PDOK WMTS provider explicitly
+register_provider("pdok-wmts", WMTSProvider)

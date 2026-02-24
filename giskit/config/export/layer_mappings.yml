@@ -187,3 +187,16 @@ layer_mappings:
       - sectie
       - perceelnummer
       - oppervlakte
+
+  # BRK WFS service (cp:cadastralparcel) - INSPIRE compliant
+  brk-percelen-wfs_cadastralparcel:
+    ifc_class: IfcGeographicElement
+    assignment_method: spatial
+    default_height: 0.02
+    name_attribute: inspireId
+    pset_name: Pset_BRK_Perceel_WFS
+    properties:
+      - inspireId
+      - label
+      - areaValue
+      - nationalCadastralReference
