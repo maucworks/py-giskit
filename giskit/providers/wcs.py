@@ -28,13 +28,13 @@ from typing import Any
 
 import geopandas as gpd
 
-from giskit.config import load_services
 from giskit.core.recipe import Dataset, Location
 from giskit.protocols.wcs import WCSProtocol
-from giskit.providers.base import Provider, register_provider
+from giskit.providers.base import register_provider
+from giskit.providers.config_driven import ConfigDrivenProvider
 
 
-class WCSProvider(Provider):
+class WCSProvider(ConfigDrivenProvider):
     """WCS provider for coverage/elevation data.
 
     Loads services from YAML config files, making it work with any provider
@@ -64,17 +64,8 @@ class WCSProvider(Provider):
             FileNotFoundError: If config file not found and no fallback provided
             ValueError: If config is invalid
         """
+        # Call parent to load services from config
         super().__init__(name, **kwargs)
-
-        # Load services from config
-        fallback = kwargs.get("fallback_services", None)
-        self.services = load_services(name, fallback=fallback)
-
-        if not self.services:
-            raise ValueError(
-                f"No services found for provider '{name}'. "
-                f"Check config/services/{name}.yml exists and is valid."
-            )
 
         # Register WCS protocols for each service/coverage
         self.protocols: dict[str, WCSProtocol] = {}
@@ -102,28 +93,6 @@ class WCSProvider(Provider):
         print(f"   Loaded {len(self.services)} services from config")
         print(f"   Registered {len(self.protocols)} coverage protocols")
         print(f"   Available coverages: {list(self.protocols.keys())}")
-
-    async def get_metadata(self) -> dict[str, Any]:
-        """Get provider metadata.
-
-        Returns:
-            Dictionary with provider information
-        """
-        # Count services by category
-        categories: dict[str, int] = {}
-        for service_config in self.services.values():
-            if isinstance(service_config, dict):
-                category = service_config.get("category", "other")
-                categories[category] = categories.get(category, 0) + 1
-
-        return {
-            "name": self.name,
-            "description": f"WCS provider: {self.name}",
-            "protocol": "wcs",
-            "total_services": len(self.services),
-            "categories": categories,
-            "services": list(self.services.keys()),
-        }
 
     async def download_dataset(
         self,
@@ -233,14 +202,6 @@ class WCSProvider(Provider):
 
         return gdf
 
-    def get_supported_services(self) -> list[str]:
-        """Get list of supported services.
-
-        Returns:
-            List of service names
-        """
-        return list(self.services.keys())
-
     def get_supported_protocols(self) -> list[str]:
         """Get list of supported protocols.
 
@@ -248,68 +209,6 @@ class WCSProvider(Provider):
             List of protocol names
         """
         return ["wcs"]
-
-    def get_services_by_category(self, category: str) -> list[str]:
-        """Get list of services in a specific category.
-
-        Args:
-            category: Category name (e.g., 'elevation', 'climate')
-
-        Returns:
-            List of service names in this category
-        """
-        services = []
-        for service_name, service_config in self.services.items():
-            if isinstance(service_config, dict):
-                if service_config.get("category") == category:
-                    services.append(service_name)
-        return services
-
-    def get_service_info(self, service_id: str) -> dict[str, Any]:
-        """Get detailed information about a specific service.
-
-        Args:
-            service_id: Service identifier
-
-        Returns:
-            Dictionary with service metadata
-
-        Raises:
-            ValueError: If service not found
-        """
-        if service_id not in self.services:
-            raise ValueError(
-                f"Service '{service_id}' not found. "
-                f"Available: {', '.join(self.services.keys())}"
-            )
-
-        service_config = self.services[service_id]
-        if isinstance(service_config, str):
-            # Old format - just URL
-            return {
-                "name": service_id,
-                "url": service_config,
-                "title": service_id.upper(),
-                "category": "unknown",
-                "description": "",
-                "keywords": [],
-            }
-        else:
-            # New format - full metadata
-            return {"name": service_id, **service_config}
-
-    def list_categories(self) -> list[str]:
-        """Get list of all service categories.
-
-        Returns:
-            List of category names
-        """
-        categories = set()
-        for service_config in self.services.values():
-            if isinstance(service_config, dict):
-                category = service_config.get("category", "other")
-                categories.add(category)
-        return sorted(categories)
 
 
 # Register WCS provider globally

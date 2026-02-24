@@ -14,11 +14,11 @@ from pathlib import Path
 from typing import Any
 
 import geopandas as gpd
-import yaml
 
 from giskit.core.recipe import Dataset, Location
 from giskit.protocols.base import Protocol
 from giskit.providers.base import Provider
+from giskit.config.yaml_utils import load_yaml_safe
 
 
 class MultiProtocolProvider(Provider):
@@ -68,8 +68,7 @@ class MultiProtocolProvider(Provider):
 
     def _load_config(self, config_file: Path) -> None:
         """Load unified provider config and organize services by protocol."""
-        with open(config_file) as f:
-            data = yaml.safe_load(f)
+        data = load_yaml_safe(config_file)
 
         if not data or "services" not in data:
             return
