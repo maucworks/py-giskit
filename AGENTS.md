@@ -209,22 +209,181 @@ class Location(BaseModel):
 - Use `httpx` for HTTP requests (not `requests`)
 - Test async code with `pytest-asyncio` (auto mode enabled)
 
+## Architecture Overview (Post-Refactoring 2026)
+
+pygiskit follows a layered, config-driven architecture:
+
+### Core Principles
+
+1. **Config-Driven**: Services defined in YAML (`config/services/*.yml`), not hardcoded
+2. **Protocol Registry**: Dynamic protocol registration (WMTS, WCS, OGC Features, WFS)
+3. **Separation of Concerns**: Clear boundaries: CLI → Core (RecipeRunner/OutputManager) → Providers → Protocols
+4. **Testability**: Core modules are async-testable with clear interfaces
+
+### Architecture Layers
+
+```
+┌─────────────────────────────────────────────┐
+│     CLI Layer (giskit/cli/)                │
+│     • download.py - User interface (189L)   │
+└────────────────┬────────────────────────────┘
+                 ▼
+┌─────────────────────────────────────────────┐
+│     Core Business Logic (giskit/core/)      │
+│     • runner.py - RecipeRunner (376L)       │
+│     • output.py - OutputManager (544L)      │
+│     • spatial.py - Geocoding, transforms    │
+│     • recipe.py - Pydantic models           │
+│     • constants.py - Centralized constants  │
+└────────────────┬────────────────────────────┘
+                 ▼
+┌─────────────────────────────────────────────┐
+│     Provider Layer (giskit/providers/)      │
+│     • config_driven.py - Base (154L)        │
+│     • wmts.py - WMTSProvider                │
+│     • wcs.py - WCSProvider                  │
+│     • ogc_features.py - OGCFeaturesProvider │
+└────────────────┬────────────────────────────┘
+                 ▼
+┌─────────────────────────────────────────────┐
+│     Protocol Layer (giskit/protocols/)      │
+│     • registry.py - ProtocolRegistry (135L) │
+│     • wmts.py - WMTSProtocol                │
+│     • wcs.py - WCSProtocol                  │
+│     • ogc_features.py - OGCFeaturesProtocol │
+└─────────────────────────────────────────────┘
+```
+
+### Key Refactorings (2026)
+
+**Phase 1 - Quick Wins:**
+- Constants extraction → Eliminated ~50 magic numbers
+- Exception chaining → 100% B904 compliance
+- Logging → Replaced 25+ print statements
+- YAML utilities → Eliminated 4 duplicate implementations
+
+**Phase 2 - Core Refactoring:**
+- ConfigDrivenProvider → Eliminated ~298 lines across 3 providers
+- ProtocolRegistry → Eliminated 60-line if/elif chain
+- Centralized HTTP errors → Eliminated ~40-50 lines of duplication
+
+**Phase 3 - CLI Refactoring:**
+- CLI reduction: 744 → 189 lines (**74% reduction!**)
+- RecipeRunner created: 376 lines (business logic)
+- OutputManager created: 544 lines (file I/O)
+- Clear separation: UI ↔ Logic ↔ I/O
+
+**Phase 4 - Testing:**
+- 32 unit tests for core modules (775 lines)
+- 36 integration tests for providers (886 lines)
+- **Total: 68 test methods** covering refactored components
+
+### Module Responsibilities
+
+**CLI Layer** (`giskit/cli/`):
+- Argument parsing and user interaction only
+- Delegates all business logic to RecipeRunner
+- Delegates all file I/O to OutputManager
+- **download.py**: 189 lines of pure UI code
+
+**Core Layer** (`giskit/core/`):
+- **runner.py** (RecipeRunner):
+  - Execute recipes and coordinate downloads
+  - Normalize layer names (_collection/_layer columns)
+  - Build metadata for IFC/GLB exports
+  - Calculate origin points for georeferencing
+- **output.py** (OutputManager):
+  - Save GeoDataFrames to GPKG/GeoJSON/SHP/FGB
+  - Auto-export to IFC/GLB/OBJ if configured
+  - Clean internal columns (_provider, _service)
+  - Progress callback integration
+- **spatial.py**: Geocoding, CRS transforms, bbox operations
+- **recipe.py**: Pydantic models (Location, Dataset, OutputConfig, Recipe)
+- **constants.py**: Centralized constants (no magic numbers)
+
+**Provider Layer** (`giskit/providers/`):
+- **config_driven.py** (ConfigDrivenProvider base class):
+  - Load services from YAML files
+  - Cache configurations
+  - Common service metadata access
+- **Provider implementations** (WMTSProvider, WCSProvider, etc.):
+  - Inherit from ConfigDrivenProvider
+  - Create protocol instances for each service/layer/coverage
+  - Implement `download_dataset()` using protocols
+
+**Protocol Layer** (`giskit/protocols/`):
+- **registry.py** (ProtocolRegistry):
+  - Register protocol factories
+  - Create protocol instances
+  - Singleton pattern via `get_protocol_registry()`
+- **Protocol implementations** (WMTSProtocol, WCSProtocol, etc.):
+  - Inherit from Protocol base class
+  - Implement API communication (HTTP requests)
+  - Return GeoDataFrames or images
+
+### Adding New Components
+
+**New Provider** (see [docs/adding_providers.md](docs/adding_providers.md)):
+1. Create YAML in `config/services/provider-name.yml`
+2. Create provider class inheriting from `ConfigDrivenProvider`
+3. Register with `register_provider()`
+
+**New Protocol** (see [docs/adding_protocols.md](docs/adding_protocols.md)):
+1. Create protocol class inheriting from `Protocol`
+2. Register with `ProtocolRegistry.register_protocol()`
+
+**New Export Format**:
+1. Add method to `OutputManager` in `core/output.py`
+2. Update `save_layers()` to call new method
+
 ## Project Structure
 
 ```
 giskit/
-├── cli/            # CLI commands (click-based)
+├── cli/            # CLI commands (189 lines - UI only)
 ├── config/         # YAML configurations for providers/services
-├── core/           # Core business logic (recipe.py, spatial.py)
+│   ├── services/   # Service YAML files (pdok-wmts.yml, pdok-wcs.yml, etc.)
+│   └── yaml_utils.py  # YAML loading utilities
+├── core/           # Core business logic (refactored Phase 3)
+│   ├── runner.py      # RecipeRunner (376 lines)
+│   ├── output.py      # OutputManager (544 lines)
+│   ├── spatial.py     # Geocoding, transforms
+│   ├── recipe.py      # Pydantic models
+│   └── constants.py   # Centralized constants (Phase 1)
 ├── exporters/      # Export formats (IFC, GLB, OBJ)
 ├── indexer/        # Monitoring & quirks
-├── protocols/      # Protocol implementations (ogc_features, wmts, wfs)
-└── providers/      # Data providers (base.py, pdok.py)
+├── protocols/      # Protocol implementations (refactored Phase 2)
+│   ├── registry.py       # ProtocolRegistry (135 lines)
+│   ├── base.py           # Protocol base class with HTTP error handling
+│   ├── wmts.py           # WMTSProtocol
+│   ├── wcs.py            # WCSProtocol
+│   ├── ogc_features.py   # OGCFeaturesProtocol
+│   └── wfs.py            # WFSProtocol
+└── providers/      # Data providers (refactored Phase 2)
+    ├── config_driven.py  # ConfigDrivenProvider base (154 lines)
+    ├── wmts.py           # WMTSProvider
+    ├── wcs.py            # WCSProvider
+    ├── ogc_features.py   # OGCFeaturesProvider
+    └── base.py           # Provider registry
 
 tests/
-├── unit/           # Fast unit tests (mocked, no external deps)
-└── integration/    # Slow integration tests (real API calls)
+├── unit/           # Unit tests (32 tests, 775 lines)
+│   ├── test_runner.py              # RecipeRunner tests
+│   ├── test_output.py              # OutputManager tests
+│   ├── test_config_driven_provider.py
+│   └── test_protocol_registry.py
+└── integration/    # Integration tests (36 tests, 886 lines)
+    ├── test_wmts_provider.py
+    ├── test_wcs_provider.py
+    └── test_pdok_providers.py
 ```
+
+## Documentation Resources
+
+- **[docs/architecture.md](docs/architecture.md)** - Complete architecture guide
+- **[docs/adding_providers.md](docs/adding_providers.md)** - Provider development guide
+- **[docs/adding_protocols.md](docs/adding_protocols.md)** - Protocol development guide  
+- **[REFACTORING_PLAN.md](REFACTORING_PLAN.md)** - Complete refactoring roadmap
 
 ## Commit Message Convention
 

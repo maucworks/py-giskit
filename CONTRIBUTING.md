@@ -148,6 +148,90 @@ py-giskit/
 └── docs/               # Documentation
 ```
 
+## 🏗️ Architecture & Refactoring (2026)
+
+py-giskit underwent a major Phase 1-3 refactoring in 2026 to improve code quality, maintainability, and extensibility.
+
+### Key Improvements
+
+**Phase 1 - Quick Wins:**
+- Extracted constants to eliminate magic numbers
+- Fixed exception chaining (100% B904 compliance)
+- Replaced print statements with proper logging
+- Extracted YAML utilities to eliminate duplication
+
+**Phase 2 - Core Refactoring:**
+- **ConfigDrivenProvider Pattern**: Add new services via YAML files, no code changes needed
+- **ProtocolRegistry Pattern**: Dynamic protocol registration (eliminated 60-line if/elif chain)
+- **Centralized HTTP Error Handling**: Common error handling in Protocol base class
+
+**Phase 3 - CLI Refactoring:**
+- **CLI Reduction**: 744 → 189 lines (**74% reduction!**)
+- **RecipeRunner Module**: Business logic extracted from CLI (376 lines)
+- **OutputManager Module**: File I/O separated from business logic (544 lines)
+- **Clear Separation**: CLI (UI) ↔ Core (Logic) ↔ Protocols (Data Access)
+
+**Phase 4 - Testing & Documentation:**
+- **68 Test Methods**: 32 unit tests + 36 integration tests for refactored modules
+- **Comprehensive Docs**: Architecture, provider/protocol guides
+
+### Impact on Development
+
+**Before Refactoring:**
+- Adding a service: Modify Python provider class (~50 lines of code)
+- Adding a protocol: Modify if/elif chain + add implementation
+- CLI was 744 lines of mixed concerns (UI + logic + I/O)
+
+**After Refactoring:**
+- Adding a service: Create/edit YAML file only (see [docs/adding_providers.md](docs/adding_providers.md))
+- Adding a protocol: Register in ProtocolRegistry (see [docs/adding_protocols.md](docs/adding_protocols.md))
+- CLI is 189 lines of pure UI code (RecipeRunner handles logic)
+
+### Adding New Providers
+
+See detailed guide: [docs/adding_providers.md](docs/adding_providers.md)
+
+Quick example:
+
+1. **Create YAML config** (`giskit/config/services/new-provider.yml`):
+   ```yaml
+   provider:
+     name: new-provider
+     title: New Provider Name
+   
+   services:
+     service-name:
+       url: https://api.example.com
+       title: Service Title
+       # ... service configuration
+   ```
+
+2. **Create provider class** (`giskit/providers/new_provider.py`):
+   ```python
+   class NewProvider(ConfigDrivenProvider):
+       # Inherit from ConfigDrivenProvider
+       # YAML config automatically loaded!
+   ```
+
+3. **Add tests** (`tests/unit/test_new_provider.py`, `tests/integration/test_new_provider.py`)
+
+That's it! No need to modify existing code.
+
+### Adding New Protocols
+
+See detailed guide: [docs/adding_protocols.md](docs/adding_protocols.md)
+
+1. Create protocol implementation inheriting from `Protocol` base class
+2. Register with `ProtocolRegistry.register_protocol()`
+3. Add unit and integration tests
+
+### Architecture Resources
+
+- **[docs/architecture.md](docs/architecture.md)** - Complete architecture overview
+- **[docs/adding_providers.md](docs/adding_providers.md)** - Provider development guide
+- **[docs/adding_protocols.md](docs/adding_protocols.md)** - Protocol development guide
+- **[REFACTORING_PLAN.md](REFACTORING_PLAN.md)** - Complete refactoring roadmap
+
 ## 🐛 Bug Reports
 
 Open een issue met:

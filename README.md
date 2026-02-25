@@ -102,6 +102,51 @@ giskit run dam_square.json
 Result: `dam_square.gpkg` with buildings and roads around Dam Square!
 
 
+## Architecture
+
+GISKit follows a layered, config-driven architecture designed for extensibility and maintainability:
+
+### Core Design Principles
+
+1. **Config-Driven Providers**: Services defined in YAML files (`config/services/*.yml`), not hardcoded
+2. **Protocol Registry**: Dynamic protocol registration for WMTS, WCS, OGC Features, WFS
+3. **Separation of Concerns**: Clean boundaries between CLI, business logic (RecipeRunner), and I/O (OutputManager)
+4. **Async-First**: All data access is async for performance and testability
+
+### Architecture Layers
+
+```
+CLI Layer (giskit/cli/)
+   ↓
+Core Business Logic (giskit/core/)
+   ├─ RecipeRunner: Execute recipes, coordinate downloads
+   ├─ OutputManager: Save data in multiple formats
+   └─ Spatial Utils: Geocoding, CRS transforms
+   ↓
+Provider Layer (giskit/providers/)
+   ├─ ConfigDrivenProvider (base class)
+   ├─ WMTSProvider, WCSProvider
+   └─ OGCFeaturesProvider, WFSProvider
+   ↓
+Protocol Layer (giskit/protocols/)
+   ├─ ProtocolRegistry (factory pattern)
+   ├─ WMTSProtocol, WCSProtocol
+   └─ OGCFeaturesProtocol, WFSProtocol
+```
+
+### Key Refactorings (2026)
+
+- **CLI Reduction**: 744 → 189 lines (74% reduction) - business logic extracted to core modules
+- **ConfigDrivenProvider Pattern**: Add new services via YAML, no code changes needed
+- **ProtocolRegistry**: Replace 60-line if/elif chain with dynamic registration
+- **Test Coverage**: 68 test methods (32 unit + 36 integration) for refactored components
+
+For detailed architecture documentation, see:
+- [docs/architecture.md](docs/architecture.md) - Complete system design
+- [docs/adding_providers.md](docs/adding_providers.md) - How to add new providers
+- [docs/adding_protocols.md](docs/adding_protocols.md) - How to add new protocols
+
+
 ## Discovering Available Data
 
 GISKit provides a **service catalog** to help you discover what data is available before writing recipes.
