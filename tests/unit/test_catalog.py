@@ -47,10 +47,16 @@ class TestListAllServices:
         """Test that each service has required metadata fields."""
         catalog = list_all_services(detailed=True)
         for _provider_id, provider_info in catalog.items():
-            services_dict = provider_info.get("services", {})
-            for _service_id, service_info in services_dict.items():
-                assert "title" in service_info
-                assert "protocol" in service_info or "url" in service_info
+            services = provider_info.get("services", {})
+            # Services can be either dict or list depending on provider
+            if isinstance(services, dict):
+                for _service_id, service_info in services.items():
+                    assert "title" in service_info
+                    assert "protocol" in service_info or "url" in service_info
+            elif isinstance(services, list):
+                for service_info in services:
+                    assert "title" in service_info
+                    assert "protocol" in service_info or "url" in service_info
 
 
 class TestSearchServices:

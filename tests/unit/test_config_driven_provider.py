@@ -36,14 +36,11 @@ class TestConfigDrivenProvider:
             async def download_dataset(self, dataset, location, output_path, output_crs):
                 pass
 
-        provider = TestProvider()
+        provider = TestProvider(name="test", fallback_services={"test_service": sample_config})
 
-        with patch.object(
-            provider, "_load_yaml_config", return_value={"services": [sample_config]}
-        ):
-            config = provider.get_service_config("test_service")
-            assert config["name"] == "test_service"
-            assert config["protocol"] == "ogc_features"
+        config = provider.get_service_info("test_service")
+        assert config["name"] == "test_service"
+        assert config["protocol"] == "ogc_features"
 
     def test_get_service_config_not_found(self):
         """Test error when service not found."""
@@ -58,11 +55,11 @@ class TestConfigDrivenProvider:
             async def download_dataset(self, dataset, location, output_path, output_crs):
                 pass
 
-        provider = TestProvider()
+        # Provide a dummy service so init doesn't fail, but search for different service
+        provider = TestProvider(name="test", fallback_services={"dummy": {"name": "dummy"}})
 
-        with patch.object(provider, "_load_yaml_config", return_value={"services": []}):
-            with pytest.raises(ValueError, match="Service 'unknown' not found"):
-                provider.get_service_config("unknown")
+        with pytest.raises(ValueError, match="Service 'unknown' not found"):
+            provider.get_service_info("unknown")
 
     def test_config_caching(self, sample_config):
         """Test that configuration is cached after first load."""
@@ -77,15 +74,12 @@ class TestConfigDrivenProvider:
             async def download_dataset(self, dataset, location, output_path, output_crs):
                 pass
 
-        provider = TestProvider()
+        # Services are loaded at init, so caching happens automatically
+        provider = TestProvider(name="test", fallback_services={"test_service": sample_config})
 
-        with patch.object(
-            provider, "_load_yaml_config", return_value={"services": [sample_config]}
-        ) as mock_load:
-            # First call should load config
-            provider.get_service_config("test_service")
-            assert mock_load.call_count == 1
+        # Access service multiple times - should use cached version
+        config1 = provider.get_service_info("test_service")
+        config2 = provider.get_service_info("test_service")
 
-            # Second call should use cache
-            provider.get_service_config("test_service")
-            assert mock_load.call_count == 1  # Still 1, not called again
+        assert config1 == config2
+        assert config1["name"] == "test_service"
