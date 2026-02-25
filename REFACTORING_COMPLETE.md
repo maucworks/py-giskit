@@ -9,11 +9,12 @@
 
 ## Executive Summary
 
-The pygiskit refactoring project successfully transformed the codebase from a functional but monolithic architecture into a clean, maintainable, well-tested system. Through 14 commits across 4 phases, we achieved:
+The pygiskit refactoring project successfully transformed the codebase from a functional but monolithic architecture into a clean, maintainable, well-tested system. Through 22 commits (14 milestones + 8 CI/CD fixes) across 4 phases, we achieved:
 
 - **74% CLI code reduction** (744 → 189 lines)
 - **~900 lines eliminated** through deduplication and extraction
 - **68 comprehensive tests** (1,661 lines of test code)
+- **100% test pass rate** (155/155 tests passing)
 - **1,280 lines of documentation** (3 new guides)
 - **100% exception chaining compliance** (B904)
 - **Clear architectural boundaries** (CLI ↔ Core ↔ Providers ↔ Protocols)
@@ -259,6 +260,7 @@ The pygiskit refactoring project successfully transformed the codebase from a fu
 
 ## Commit History
 
+### Refactoring Milestones (14 commits)
 ```
 e5dfb14 docs: add architecture and contribution documentation (Milestone 4.3)
 52c4606 test: add integration tests for WMTS and WCS providers (Milestone 4.2)
@@ -276,7 +278,19 @@ b4dd09c refactor: extract magic numbers to constants, enable ruff B904 (Mileston
 aa3f435 feat: update PDOK APIs and add refactoring plan (Initial planning)
 ```
 
-**Total:** 14 commits (1 initial + 13 milestones)
+### CI/CD Fixes (8 commits)
+```
+ac964f7 fix: resolve final 3 test failures (100% pass rate)
+4399798 fix: correct test implementations (catalog + config_driven_provider)
+8405583 fix: add missing Pillow dependency for WMTS protocol
+b484307 fix: add proper exception chaining (B904) to CLI commands and WCS
+8870aad chore: update poetry.lock with rasterio dependency
+7de0e79 fix: add missing rasterio dependency for WCS protocol
+9f38cf9 docs: update REFACTORING_COMPLETE.md (CI/CD status)
+0755c4a docs: update REFACTORING_COMPLETE.md (metrics)
+```
+
+**Total:** 22 commits (14 milestones + 8 CI/CD fixes)
 
 ---
 
@@ -371,7 +385,7 @@ aa3f435 feat: update PDOK APIs and add refactoring plan (Initial planning)
 
 - ✅ **ruff-format** - All files formatted correctly
 - ✅ **ruff** - All linting checks passing (0 violations after B904 fixes)
-- ✅ **pytest-unit** - 148/155 tests passing (95.5% pass rate)
+- ✅ **pytest-unit** - **155/155 tests passing (100% pass rate)**
 - ✅ **trailing-whitespace** - No trailing whitespace found
 - ✅ **fix-end-of-files** - All files have proper line endings
 - ✅ **check-yaml** - All YAML files valid
@@ -410,10 +424,24 @@ The project had undeclared dependencies - packages that were imported in code bu
 - **Fix:** Added proper exception chaining with `raise ... from e` or `raise ... from None`
 - **Commit:** `b484307` - fix: add proper exception chaining (B904) to CLI commands and WCS protocol
 
-**3. Test Results**
-- **Status:** Tests now run successfully in CI environment
-- **Coverage:** 95.5% pass rate (148/155 tests passing)
+**3. Test Failures - 3 tests fixed (Correctness)**
+- **Initial Status:** 152/155 tests passing (98.1% pass rate) after dependency and B904 fixes
+- **Failures:**
+  1. `test_auto_export_ifc_not_configured` - Mock patch pointing to wrong import path
+  2. `test_relative_output_path` - Parent directory not created before saving
+  3. `test_built_in_protocols_registered` - Registry cleared by previous tests
+- **Fixes Applied:**
+  - **Fix 1:** Updated mock path from `giskit.core.output.IFCExporter` to `giskit.exporters.ifc.IFCExporter` (patch where imported, not where used)
+  - **Fix 2:** Added `output_path.parent.mkdir(parents=True, exist_ok=True)` in OutputManager.save_layers() to ensure parent directory exists
+  - **Fix 3:** Used `importlib.reload()` after `clear_registry()` to trigger protocol re-registration in test
+- **Commit:** `ac964f7` - fix: resolve final 3 test failures (100% pass rate)
+- **Final Result:** **155/155 tests passing (100% pass rate)** ✅
+
+**4. Test Results Summary**
+- **Status:** ✅ All tests now passing in CI environment
+- **Coverage:** **100% pass rate (155/155 tests passing)**
 - **Refactored Components:** 100% of refactored component tests passing
+- **Total Commits for CI/CD:** 8 commits (4 dependency fixes + 1 B904 fix + 1 test fix + 2 doc updates)
 
 ### ⚠️ Requires Poetry Environment
 
