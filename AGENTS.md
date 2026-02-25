@@ -382,7 +382,7 @@ tests/
 
 - **[docs/architecture.md](docs/architecture.md)** - Complete architecture guide
 - **[docs/adding_providers.md](docs/adding_providers.md)** - Provider development guide
-- **[docs/adding_protocols.md](docs/adding_protocols.md)** - Protocol development guide  
+- **[docs/adding_protocols.md](docs/adding_protocols.md)** - Protocol development guide
 - **[REFACTORING_PLAN.md](REFACTORING_PLAN.md)** - Complete refactoring roadmap
 
 ## Commit Message Convention

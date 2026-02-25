@@ -187,7 +187,7 @@ class YourProvider(ConfigDrivenProvider):
             if isinstance(service_config, dict):
                 # Extract configuration
                 url = service_config.get("url", "")
-                
+
                 # Create protocol instance(s)
                 # Specific logic depends on your protocol type
                 # See existing providers for examples
@@ -221,7 +221,7 @@ class YourProvider(ConfigDrivenProvider):
         # 4. Use protocol to download data
         # 5. Save to output_path if needed
         # 6. Return GeoDataFrame
-        
+
         pass  # Implement based on your protocol
 
     def get_supported_protocols(self) -> list[str]:
@@ -304,7 +304,7 @@ class TestYourProviderConfiguration:
     def test_loads_services_from_yaml(self):
         """Test that provider loads services from YAML config."""
         provider = YourProvider("your-provider")
-        
+
         assert len(provider.services) > 0
         assert "service-name" in provider.services
 
@@ -312,7 +312,7 @@ class TestYourProviderConfiguration:
     def test_protocols_registered(self):
         """Test that protocols are registered."""
         provider = YourProvider("your-provider")
-        
+
         # Check protocols dict is populated
         assert len(provider.protocols) > 0
 
@@ -354,7 +354,7 @@ class TestYourProviderIntegration:
     def test_yaml_config_loaded(self):
         """Test that YAML config is loaded correctly."""
         provider = YourProvider("your-provider")
-        
+
         # Test service metadata from YAML
         service = provider.services["service-name"]
         assert service["title"] is not None
@@ -392,7 +392,7 @@ Add your provider to `README.md`:
 - **PDOK** (Publieke Dienstverlening Op de Kaart)
   - OGC Features, WMTS, WCS
   - BAG, BGT, AHN, aerial imagery
-  
+
 - **Your Provider**
   - Protocol type
   - Data types provided
@@ -462,7 +462,7 @@ for service_name, service_config in self.services.items():
     if isinstance(service_config, dict):
         url = service_config.get("url", "")
         layers = service_config.get("layers", {})
-        
+
         for layer_key, layer_name in layers.items():
             protocol_key = f"{service_name}.{layer_key}"
             self.protocols[protocol_key] = ProtocolClass(

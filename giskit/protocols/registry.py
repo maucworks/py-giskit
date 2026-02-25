@@ -14,7 +14,7 @@ Example:
     >>> protocol = registry.create("wfs", {"url": "https://..."})
 """
 
-from typing import Any, Callable, Protocol as TypingProtocol
+from typing import Any, Callable
 
 from giskit.protocols.base import Protocol
 

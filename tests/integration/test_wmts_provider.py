@@ -7,12 +7,12 @@ Note: These tests are marked as @pytest.mark.integration and @pytest.mark.slow
 since they require network access and may take several seconds.
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-from giskit.providers.wmts import WMTSProvider
+import pytest
+
 from giskit.core.recipe import Dataset, Location, LocationType
+from giskit.providers.wmts import WMTSProvider
 
 
 class TestWMTSProviderConfiguration:

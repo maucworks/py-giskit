@@ -15,10 +15,10 @@ from typing import Any
 
 import geopandas as gpd
 
+from giskit.config.yaml_utils import load_yaml_safe
 from giskit.core.recipe import Dataset, Location
 from giskit.protocols.base import Protocol
 from giskit.providers.base import Provider
-from giskit.config.yaml_utils import load_yaml_safe
 
 
 class MultiProtocolProvider(Provider):

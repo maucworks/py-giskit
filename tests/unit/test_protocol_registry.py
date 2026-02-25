@@ -2,7 +2,6 @@
 
 import pytest
 
-from giskit.protocols.base import Protocol
 from giskit.protocols.registry import ProtocolRegistry, clear_registry, register_protocol
 
 
@@ -82,7 +81,6 @@ class TestProtocolRegistry:
     def test_built_in_protocols_registered(self):
         """Test that built-in protocols are registered on import."""
         # Import triggers registration
-        from giskit.protocols import ogc_features, wcs, wfs, wmts
 
         available = ProtocolRegistry.get_available_protocols()
 

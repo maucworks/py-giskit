@@ -33,7 +33,6 @@ from giskit.core.constants import (
     JPEG_OPTIMIZE,
     WMTS_DEFAULT_RESOLUTION_M,
 )
-
 from giskit.core.recipe import Dataset, Location
 from giskit.protocols.wmts import WMTSProtocol
 from giskit.providers.base import register_provider

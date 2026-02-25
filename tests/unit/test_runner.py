@@ -1,6 +1,5 @@
 """Unit tests for RecipeRunner."""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import geopandas as gpd

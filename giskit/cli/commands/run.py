@@ -7,8 +7,8 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from giskit.core.recipe import Recipe
 from giskit.core.output import OutputManager
+from giskit.core.recipe import Recipe
 from giskit.core.runner import RecipeRunner
 
 console = Console()
@@ -49,7 +49,7 @@ async def _execute_recipe(recipe: Recipe, recipe_dir: Path, console: Console, ve
 
     # Print verbose output if requested
     if verbose and layers:
-        console.print(f"\n[bold]Downloaded Layers:[/bold]")
+        console.print("\n[bold]Downloaded Layers:[/bold]")
         for layer_name, gdf in layers.items():
             console.print(f"  {layer_name}: {len(gdf)} features")
 

@@ -15,11 +15,11 @@ the integration between multiple refactored components.
 
 import pytest
 
+from giskit.protocols.registry import get_protocol_registry
 from giskit.providers.base import get_provider
 from giskit.providers.config_driven import ConfigDrivenProvider
-from giskit.providers.wmts import WMTSProvider
 from giskit.providers.wcs import WCSProvider
-from giskit.protocols.registry import get_protocol_registry
+from giskit.providers.wmts import WMTSProvider
 
 
 class TestPDOKWMTSConfigDrivenProvider:

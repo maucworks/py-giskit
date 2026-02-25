@@ -198,7 +198,7 @@ Quick example:
    provider:
      name: new-provider
      title: New Provider Name
-   
+
    services:
      service-name:
        url: https://api.example.com
