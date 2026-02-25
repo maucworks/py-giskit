@@ -206,16 +206,16 @@ class TestOutputManager:
         # Should have success message
         assert any(level == "success" for _, level in messages)
 
-    @patch("giskit.exporters.ifc.IFCExporter")
-    def test_auto_export_ifc_not_configured(
-        self, mock_ifc_exporter, sample_recipe_gpkg, sample_layers, tmp_path
-    ):
+    def test_auto_export_ifc_not_configured(self, sample_recipe_gpkg, sample_layers, tmp_path):
         """Test that IFC auto-export is skipped when not configured."""
         manager = OutputManager(sample_recipe_gpkg, tmp_path)
-        manager.save_layers(sample_layers)
 
-        # IFCExporter should not be called (recipe has ifc_export=None)
-        mock_ifc_exporter.assert_not_called()
+        # Mock the _auto_export_ifc method to verify it's not called
+        with patch.object(manager, "_auto_export_ifc") as mock_auto_export:
+            manager.save_layers(sample_layers)
+
+            # _auto_export_ifc should not be called when ifc_export=None
+            mock_auto_export.assert_not_called()
 
     def test_relative_output_path(self, tmp_path, sample_layers):
         """Test that relative output paths are resolved correctly."""
