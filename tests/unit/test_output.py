@@ -8,7 +8,7 @@ import pytest
 from shapely.geometry import Point
 
 from giskit.core.output import OutputManager
-from giskit.core.recipe import Location, LocationType, Output, OutputFormat, Recipe
+from giskit.core.recipe import Dataset, Location, LocationType, Output, OutputFormat, Recipe
 
 
 class TestOutputManager:
@@ -26,7 +26,7 @@ class TestOutputManager:
                 crs="EPSG:4326",
                 radius=None,
             ),
-            datasets=[],
+            datasets=[Dataset(provider="test", service="test_service")],
             output=Output(
                 path=tmp_path / "output.gpkg",
                 format=OutputFormat.GPKG,
@@ -86,7 +86,7 @@ class TestOutputManager:
                 crs="EPSG:4326",
                 radius=None,
             ),
-            datasets=[],
+            datasets=[Dataset(provider="test", service="test_service")],
             output=Output(
                 path=tmp_path / "output.geojson",
                 format=OutputFormat.GEOJSON,
@@ -117,10 +117,10 @@ class TestOutputManager:
                 crs="EPSG:4326",
                 radius=None,
             ),
-            datasets=[],
+            datasets=[Dataset(provider="test", service="test_service")],
             output=Output(
                 path=tmp_path / "output.shp",
-                format=OutputFormat.SHP,
+                format=OutputFormat.SHAPEFILE,
                 crs="EPSG:28992",
                 overwrite=True,
                 layer_prefix=None,
@@ -144,10 +144,10 @@ class TestOutputManager:
                 crs="EPSG:4326",
                 radius=None,
             ),
-            datasets=[],
+            datasets=[Dataset(provider="test", service="test_service")],
             output=Output(
                 path=tmp_path / "output.fgb",
-                format=OutputFormat.FGB,
+                format=OutputFormat.FLATGEOBUF,
                 crs="EPSG:28992",
                 overwrite=True,
                 layer_prefix=None,
@@ -172,7 +172,7 @@ class TestOutputManager:
                 crs="EPSG:4326",
                 radius=None,
             ),
-            datasets=[],
+            datasets=[Dataset(provider="test", service="test_service")],
             output=Output(
                 path=tmp_path / "output.xyz",
                 format=OutputFormat.GPKG,  # Set valid format initially
@@ -228,7 +228,7 @@ class TestOutputManager:
                 crs="EPSG:4326",
                 radius=None,
             ),
-            datasets=[],
+            datasets=[Dataset(provider="test", service="test_service")],
             output=Output(
                 path=Path("relative/output.gpkg"),  # Relative path
                 format=OutputFormat.GPKG,

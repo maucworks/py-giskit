@@ -227,9 +227,9 @@ class TestRecipeRunner:
                 type=LocationType.POINT,
                 value=[4.9, 52.37],
                 crs="EPSG:4326",
-                radius=None,
+                radius=1000,  # Required for POINT location
             ),
-            datasets=[],
+            datasets=[Dataset(provider="test", service="test_service")],
             output=Output(
                 path=tmp_path / "output.gpkg",
                 format=OutputFormat.GPKG,
@@ -263,7 +263,7 @@ class TestRecipeRunner:
         assert metadata_dict["bbox_maxy"] == [410000]
         assert metadata_dict["crs"] == ["EPSG:28992"]
         assert "download_date" in metadata_dict
-        assert metadata_dict["bgt_layers"] == [["pand"]]
+        assert metadata_dict["bgt_layers"] == ["pand"]
 
     def test_build_metadata_dict_many_bgt_layers(self, tmp_path):
         """Test metadata dict with many BGT layers."""
@@ -281,7 +281,7 @@ class TestRecipeRunner:
                 Dataset(
                     provider="pdok",
                     service="bgt",
-                    layers=[f"layer{i}" for i in range(20)],  # Many layers
+                    layers=[f"layer{i}" for i in range(50)],  # Many layers (> threshold)
                     query=None,
                     product=None,
                     resolution=None,

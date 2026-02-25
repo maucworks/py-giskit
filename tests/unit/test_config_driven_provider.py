@@ -30,6 +30,9 @@ class TestConfigDrivenProvider:
             def _get_config_file(self) -> Path:
                 return Path("test.yaml")
 
+            def get_supported_protocols(self) -> list[str]:
+                return ["ogc_features"]
+
             async def download_dataset(self, dataset, location, output_path, output_crs):
                 pass
 
@@ -49,6 +52,9 @@ class TestConfigDrivenProvider:
             def _get_config_file(self) -> Path:
                 return Path("test.yaml")
 
+            def get_supported_protocols(self) -> list[str]:
+                return ["ogc_features"]
+
             async def download_dataset(self, dataset, location, output_path, output_crs):
                 pass
 
@@ -64,6 +70,9 @@ class TestConfigDrivenProvider:
         class TestProvider(ConfigDrivenProvider):
             def _get_config_file(self) -> Path:
                 return Path("test.yaml")
+
+            def get_supported_protocols(self) -> list[str]:
+                return ["ogc_features"]
 
             async def download_dataset(self, dataset, location, output_path, output_crs):
                 pass
