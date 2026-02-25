@@ -145,25 +145,25 @@ def run(recipe_path: Path, verbose: bool, dry_run: bool, log_level: str) -> None
                     console.print(f"[red]✗[/red] Export failed: {e}")
                     if verbose:
                         console.print_exception()
-                    raise click.Abort()
+                    raise click.Abort() from e
                 except Exception as e:
                     console.print(f"[red]✗[/red] Failed to save output: {e}")
                     if verbose:
                         console.print_exception()
-                    raise click.Abort()
+                    raise click.Abort() from e
             else:
                 console.print("\n[yellow]No features downloaded[/yellow]")
         except Exception as download_error:
             console.print(f"\n[bold red]Download failed:[/bold red] {download_error}")
             if verbose:
                 console.print_exception()
-            raise click.Abort()
+            raise click.Abort() from download_error
 
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         if verbose:
             console.print_exception()
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @click.command()
@@ -186,4 +186,4 @@ def validate(recipe_path: Path) -> None:
     except Exception as e:
         console.print("[bold red]✗[/bold red] Recipe validation failed")
         console.print(f"[red]{e}[/red]")
-        raise click.Abort()
+        raise click.Abort() from e

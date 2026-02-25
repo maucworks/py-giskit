@@ -254,8 +254,8 @@ class WCSProtocol(Protocol):
                 root = ET.fromstring(response.content)
                 error_msg = root.text or "Unknown WCS error"
                 raise WCSError(f"WCS service error: {error_msg}")
-            except ET.ParseError:
-                raise WCSError("WCS service returned XML error (parse failed)")
+            except ET.ParseError as e:
+                raise WCSError("WCS service returned XML error (parse failed)") from e
 
         # Parse GeoTIFF using rasterio
         if progress_callback:
