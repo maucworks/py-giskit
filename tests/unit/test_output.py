@@ -206,7 +206,7 @@ class TestOutputManager:
         # Should have success message
         assert any(level == "success" for _, level in messages)
 
-    @patch("giskit.core.output.IFCExporter")
+    @patch("giskit.exporters.ifc.IFCExporter")
     def test_auto_export_ifc_not_configured(
         self, mock_ifc_exporter, sample_recipe_gpkg, sample_layers, tmp_path
     ):
@@ -214,7 +214,7 @@ class TestOutputManager:
         manager = OutputManager(sample_recipe_gpkg, tmp_path)
         manager.save_layers(sample_layers)
 
-        # IFCExporter should not be called
+        # IFCExporter should not be called (recipe has ifc_export=None)
         mock_ifc_exporter.assert_not_called()
 
     def test_relative_output_path(self, tmp_path, sample_layers):

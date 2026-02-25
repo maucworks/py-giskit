@@ -58,6 +58,9 @@ class OutputManager:
         if not output_path.is_absolute():
             output_path = self.recipe_dir / output_path
 
+        # Ensure parent directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
         output_format = self.recipe.output.format.value
 
         if progress_callback:

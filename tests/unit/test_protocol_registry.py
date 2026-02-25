@@ -84,14 +84,30 @@ class TestProtocolRegistry:
         assert len(registry._factories) == 0
 
     def test_built_in_protocols_registered(self):
-        """Test that built-in protocols are registered on import."""
-        # Import triggers registration
+        """Test that built-in protocols are registered on import.
+
+        Note: We clear the registry and reload modules to ensure protocols
+        are properly registered via module imports.
+        """
+        import importlib
+
+        import giskit.protocols.ogc_features
+        import giskit.protocols.wcs
+        import giskit.protocols.wfs
+        import giskit.protocols.wmts
+
+        # Clear registry and reload modules to trigger re-registration
+        clear_registry()
+        importlib.reload(giskit.protocols.ogc_features)
+        importlib.reload(giskit.protocols.wcs)
+        importlib.reload(giskit.protocols.wfs)
+        importlib.reload(giskit.protocols.wmts)
 
         registry = get_registry()
         available = registry.list_protocols()
 
-        # These should all be registered
-        assert "ogc_features" in available
+        # These should all be registered (note: ogc-features uses hyphen)
+        assert "ogc-features" in available
         assert "wcs" in available
         assert "wfs" in available
         assert "wmts" in available
