@@ -405,11 +405,11 @@ The project had undeclared dependencies - packages that were imported in code bu
 - **Issue:** `ModuleNotFoundError: No module named 'PIL'` in WMTS protocol
 - **Root Cause:** Dependencies used in code but not declared in `pyproject.toml`
 - **Impact:** CI builds failed immediately on module import
-- **Fix:** 
+- **Fix:**
   - Added `rasterio = "^1.3.0"` to dependencies (WCS protocol needs it for GeoTIFF parsing)
   - Added `pillow = "^10.0.0"` to dependencies (WMTS protocol needs it for image processing)
   - Updated `poetry.lock` to lock versions
-- **Commits:** 
+- **Commits:**
   - `7de0e79` - fix: add missing rasterio dependency for WCS protocol
   - `8870aad` - chore: update poetry.lock with rasterio dependency
   - `8405583` - fix: add missing Pillow dependency for WMTS protocol
