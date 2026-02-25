@@ -133,3 +133,15 @@ def get_registry() -> ProtocolRegistry:
         Global ProtocolRegistry instance
     """
     return _registry
+
+
+def clear_registry() -> None:
+    """Clear all registered protocols from the global registry.
+
+    This is primarily used for testing to ensure a clean state.
+
+    Example:
+        >>> clear_registry()  # Reset registry for tests
+        >>> register_protocol("test", lambda c: TestProtocol())
+    """
+    _registry._factories.clear()
