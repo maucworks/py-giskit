@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "pygiskit"
-version = "0.1.6"
+version = "0.1.7"
 description = "Recipe-driven spatial data downloader for Dutch geo-data"
-authors = ["A190 <info@a190.nl>"]
+authors = ["Sander Boer <sanderboer@mauc.nl>"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/sanderboer/py-giskit"
-repository = "https://github.com/sanderboer/py-giskit"
+homepage = "https://github.com/maucworks/py-giskit"
+repository = "https://github.com/maucworks/py-giskit"
 keywords = ["gis", "spatial", "ogc", "wfs", "wmts", "geodata", "recipe", "openstreetmap", "pdok"]
 packages = [{include = "giskit"}]
 classifiers = [
