@@ -217,7 +217,7 @@ class GLBExporter:
                     g = color.g() if callable(getattr(color, "g", None)) else 0.8
                     b = color.b() if callable(getattr(color, "b", None)) else 0.8
                     # Create ID from color values (rounded to 2 decimals)
-                    return f"mat_rgb_{int(r*100)}_{int(g*100)}_{int(b*100)}"
+                    return f"mat_rgb_{int(r * 100)}_{int(g * 100)}_{int(b * 100)}"
 
         # Default: use IFC class
         return f"mat_{product.is_a()}"

@@ -173,7 +173,7 @@ class WCSProtocol(Protocol):
             NotImplementedError: WCS is raster-only
         """
         raise NotImplementedError(
-            "WCS protocol does not support vector features. " "Use get_coverage() for raster data."
+            "WCS protocol does not support vector features. Use get_coverage() for raster data."
         )
 
     async def get_coverage(

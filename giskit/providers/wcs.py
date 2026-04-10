@@ -23,15 +23,18 @@ Examples:
     >>> services = provider.get_supported_services()
 """
 
+import logging
 from pathlib import Path
 from typing import Any
 
 import geopandas as gpd
 
-from giskit.core.recipe import Dataset, Location
+from giskit.core.recipe import Dataset, Location, LocationType
 from giskit.protocols.wcs import WCSProtocol
 from giskit.providers.base import register_provider
 from giskit.providers.config_driven import ConfigDrivenProvider
+
+logger = logging.getLogger(__name__)
 
 
 class WCSProvider(ConfigDrivenProvider):
@@ -89,10 +92,10 @@ class WCSProvider(ConfigDrivenProvider):
                         native_resolution=native_resolution,
                     )
 
-        print("✅ WCSProvider initialized")
-        print(f"   Loaded {len(self.services)} services from config")
-        print(f"   Registered {len(self.protocols)} coverage protocols")
-        print(f"   Available coverages: {list(self.protocols.keys())}")
+        logger.info("WCSProvider initialized")
+        logger.info(f"  Loaded {len(self.services)} services from config")
+        logger.debug(f"  Registered {len(self.protocols)} coverage protocols")
+        logger.debug(f"  Available coverages: {list(self.protocols.keys())}")
 
     async def download_dataset(
         self,
@@ -139,7 +142,7 @@ class WCSProvider(ConfigDrivenProvider):
 
         # For now, assume location is already a bbox in EPSG:28992
         # TODO: Add proper location conversion for other types
-        if location.type.value != "bbox":
+        if location.type != LocationType.BBOX:
             raise NotImplementedError(
                 f"Location type '{location.type.value}' not yet supported for WCS. "
                 "Use bbox for now."
@@ -168,13 +171,13 @@ class WCSProvider(ConfigDrivenProvider):
         output_file = output_path / f"{coverage_name}.tif"
 
         # Download coverage as GeoTIFF
-        print(f"📥 Downloading {protocol_key}...")
-        print(f"   Resolution: {resolution}m")
-        print(f"   Bbox: {bbox}")
+        logger.info(f"Downloading {protocol_key}...")
+        logger.debug(f"  Resolution: {resolution}m")
+        logger.debug(f"  Bbox: {bbox}")
 
         def progress(msg: str, pct: float):
             """Simple progress callback."""
-            print(f"   [{pct*100:.0f}%] {msg}")
+            logger.debug(f"  [{pct * 100:.0f}%] {msg}")
 
         saved_path = await protocol.save_coverage_as_geotiff(
             bbox=bbox,
@@ -184,7 +187,7 @@ class WCSProvider(ConfigDrivenProvider):
             progress_callback=progress,
         )
 
-        print(f"✅ Saved to: {saved_path}")
+        logger.info(f"Saved to: {saved_path}")
 
         # Return GeoDataFrame with metadata
         # (WCS returns raster data, but we return metadata as GeoDataFrame for consistency)

@@ -92,8 +92,7 @@ class ConfigDrivenProvider(Provider):
         """
         if service_id not in self.services:
             raise ValueError(
-                f"Service '{service_id}' not found. "
-                f"Available: {', '.join(self.services.keys())}"
+                f"Service '{service_id}' not found. Available: {', '.join(self.services.keys())}"
             )
 
         service_config = self.services[service_id]

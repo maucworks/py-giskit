@@ -1,7 +1,5 @@
 """Unit tests for ConfigDrivenProvider."""
 
-from pathlib import Path
-
 import pytest
 
 from giskit.providers.config_driven import ConfigDrivenProvider
@@ -26,9 +24,6 @@ class TestConfigDrivenProvider:
         class TestProvider(ConfigDrivenProvider):
             """Test provider implementation."""
 
-            def _get_config_file(self) -> Path:
-                return Path("test.yaml")
-
             def get_supported_protocols(self) -> list[str]:
                 return ["ogc_features"]
 
@@ -45,9 +40,6 @@ class TestConfigDrivenProvider:
         """Test error when service not found."""
 
         class TestProvider(ConfigDrivenProvider):
-            def _get_config_file(self) -> Path:
-                return Path("test.yaml")
-
             def get_supported_protocols(self) -> list[str]:
                 return ["ogc_features"]
 
@@ -64,9 +56,6 @@ class TestConfigDrivenProvider:
         """Test that configuration is cached after first load."""
 
         class TestProvider(ConfigDrivenProvider):
-            def _get_config_file(self) -> Path:
-                return Path("test.yaml")
-
             def get_supported_protocols(self) -> list[str]:
                 return ["ogc_features"]
 

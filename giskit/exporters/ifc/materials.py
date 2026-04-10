@@ -4,6 +4,7 @@ Materials manager for IFC export.
 Loads color and material configurations from YAML files and provides
 lookup functions for assigning colors and materials to IFC entities.
 """
+
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 

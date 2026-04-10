@@ -3,6 +3,8 @@ Layer exporters for different GeoPackage layer types.
 
 Generic plugin system that works with MaterialsManager and YAML configs.
 """
+
+import logging
 from typing import Any, Dict
 
 import geopandas as gpd
@@ -21,6 +23,8 @@ from .geometry import (
 )
 from .materials import MaterialsManager
 from .schema_adapter import SchemaAdapter, clean_ifc_name, sanitize_ifc_name
+
+logger = logging.getLogger(__name__)
 
 
 class LayerExporter:
@@ -62,10 +66,12 @@ class LayerExporter:
         Returns:
             Statistics dict (e.g., {'buildings': 3})
         """
+        # Resolve container: features are assigned directly to site
+        spatial_container = site
         # Get layer configuration
         layer_config = self.materials.get_layer_config(layer_name)
         if not layer_config:
-            print(f"Warning: No configuration for layer {layer_name}, skipping")
+            logger.warning("No configuration for layer %s, skipping", layer_name)
             return {}
 
         # Read GeoDataFrame
@@ -119,15 +125,21 @@ class LayerExporter:
             # Add property set
             self._add_property_set(entity, layer_name, feature_data, ifc_file)
 
-            # Assign to site
+            # Assign to spatial container (zone or site)
             assignment_method = layer_config.get("assignment_method", "spatial")
             if assignment_method == "aggregate":
                 ifcopenshell.api.run(
-                    "aggregate.assign_object", ifc_file, relating_object=site, products=[entity]
+                    "aggregate.assign_object",
+                    ifc_file,
+                    relating_object=spatial_container,
+                    products=[entity],
                 )
             else:  # spatial / container
                 ifcopenshell.api.run(
-                    "spatial.assign_container", ifc_file, relating_structure=site, products=[entity]
+                    "spatial.assign_container",
+                    ifc_file,
+                    relating_structure=spatial_container,
+                    products=[entity],
                 )
 
             count += 1
@@ -159,12 +171,14 @@ class LayerExporter:
         # Get IFC class
         ifc_class = self.materials.get_ifc_class(layer_name, ifc_file.schema)
 
-        # Get name
+        # Get name — prepend provider label so Blender outliner groups by provider
+        provider = self._get_provider_label(layer_name)
         name_attr = layer_config.get("name_attribute")
         if name_attr and name_attr in feature_data:
-            name = sanitize_ifc_name(str(feature_data[name_attr]))
+            feature_name = sanitize_ifc_name(str(feature_data[name_attr]))
         else:
-            name = sanitize_ifc_name(f"{layer_name}.{id(feature_data)}")
+            feature_name = sanitize_ifc_name(f"{layer_name}.{id(feature_data)}")
+        name = f"{provider} - {feature_name}"
 
         # Create entity
         entity = ifcopenshell.api.run(
@@ -313,7 +327,7 @@ class LayerExporter:
                 faces.append(face)
             except Exception as e:
                 # Skip faces that can't be converted, but log for debugging
-                print(f"Warning: Failed to create IFC face for polygon: {e}")
+                logger.warning("Failed to create IFC face for polygon: %s", e)
 
         if not faces:
             return
@@ -392,7 +406,7 @@ class LayerExporter:
                 faces_by_type[surface_type].append(face)
             except Exception as e:
                 # Skip faces that can't be converted, but log for debugging
-                print(f"Warning: Failed to create IFC face for polygon: {e}")
+                logger.warning("Failed to create IFC face for polygon: %s", e)
 
         # Create separate representations for each surface type
         # NEW APPROACH: Create separate IfcBuildingElementProxy for each surface type
@@ -427,7 +441,8 @@ class LayerExporter:
             )
 
             # Create a child IfcBuildingElementProxy for this surface
-            element_name = sanitize_ifc_name(entity.Name)
+            provider = self._get_provider_label(layer_name)
+            element_name = f"{provider} - {sanitize_ifc_name(entity.Name)}"
             child_element = ifcopenshell.api.run(
                 "root.create_entity",
                 ifc_file,
@@ -464,7 +479,7 @@ class LayerExporter:
                 child_element, layer_name, surface_feature_data_for_pset, ifc_file
             )
 
-            # Add child to site (not as aggregate of parent, but as sibling)
+            # Add child to site
             ifcopenshell.api.run(
                 "spatial.assign_container",
                 ifc_file,
@@ -494,6 +509,40 @@ class LayerExporter:
         if props:
             pset = ifcopenshell.api.run("pset.add_pset", ifc_file, product=entity, name=pset_name)
             ifcopenshell.api.run("pset.edit_pset", ifc_file, pset=pset, properties=props)
+
+    def _get_provider_label(self, layer_name: str) -> str:
+        """Return a short provider label derived from the layer name prefix.
+
+        Used to prepend to IFC entity names so Blender's outliner groups
+        objects visually by provider when sorted alphabetically.
+
+        Examples:
+            bgt_pand                        → BGT
+            bag3d_lod22                     → BAG3D
+            bag_pand                        → BAG
+            kadastralekaart-wfs_perceel     → Kadastrale Kaart
+            brk-percelen-wfs_cadastralparcel → BRK
+        """
+        prefixes = [
+            ("bag3d", "BAG3D"),
+            ("kadastralekaart-wfs", "Kadastrale Kaart"),
+            ("kadastralekaart-ogc", "Kadastrale Kaart"),
+            ("brk-percelen-wfs", "BRK"),
+            ("brk", "BRK"),
+            ("bag", "BAG"),
+            ("bgt", "BGT"),
+            ("ahn", "AHN"),
+            ("luchtfoto", "Luchtfoto"),
+            ("cbs", "CBS"),
+            ("nwb", "NWB"),
+        ]
+        for prefix, label in prefixes:
+            if layer_name.startswith(prefix):
+                return label
+        for sep in ("_", "-"):
+            if sep in layer_name:
+                return layer_name.split(sep)[0].upper()
+        return layer_name.upper()
 
     def _get_or_create_style(self, ifc_file: Any, material_name: str, color: tuple) -> Any:
         """Get or create surface style for a material."""

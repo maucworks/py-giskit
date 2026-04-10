@@ -79,7 +79,7 @@ class QuirksMonitor:
 
         # Log at debug level
         logger.debug(
-            f"Applied quirk: {provider}/{protocol}/{quirk_type} " f"(count: {usage.applied_count})"
+            f"Applied quirk: {provider}/{protocol}/{quirk_type} (count: {usage.applied_count})"
         )
 
     def get_statistics(self) -> dict:
@@ -226,7 +226,7 @@ def log_quirk_application(quirks: ProtocolQuirks, provider: str, protocol: str, 
 
     if active_quirks:
         logger.debug(
-            f"{provider}/{protocol}.{operation} - " f"Active quirks: {', '.join(active_quirks)}"
+            f"{provider}/{protocol}.{operation} - Active quirks: {', '.join(active_quirks)}"
         )
     else:
         logger.debug(f"{provider}/{protocol}.{operation} - No quirks applied")

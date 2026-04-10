@@ -255,8 +255,7 @@ class WMTSProtocol(Protocol):
             NotImplementedError: WMTS is raster-only
         """
         raise NotImplementedError(
-            "WMTS protocol does not support vector features. "
-            "Use get_coverage() for raster imagery."
+            "WMTS protocol does not support vector features. Use get_coverage() for raster imagery."
         )
 
     async def get_coverage(

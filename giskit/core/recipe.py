@@ -388,7 +388,7 @@ class Recipe(BaseModel):
 
     @classmethod
     def from_file(cls, path: Path) -> "Recipe":
-        """Load recipe from JSON/YAML file."""
+        """Load recipe from a JSON file."""
         import json
 
         with open(path) as f:
@@ -436,7 +436,8 @@ class Recipe(BaseModel):
                 lon, lat = transform_point(lon, lat, self.location.crs, "EPSG:4326")
 
             # Buffer point to create bbox
-            assert self.location.radius is not None
+            if self.location.radius is None:
+                raise ValueError("Radius is required for point location")
             return buffer_point_to_bbox(lon, lat, self.location.radius)
 
         elif self.location.type == LocationType.ADDRESS:
@@ -444,7 +445,8 @@ class Recipe(BaseModel):
             lon, lat = await geocode(self.location.value)  # type: ignore
 
             # Buffer to create bbox
-            assert self.location.radius is not None
+            if self.location.radius is None:
+                raise ValueError("Radius is required for address location")
             return buffer_point_to_bbox(lon, lat, self.location.radius)
 
         elif self.location.type == LocationType.POLYGON:

@@ -110,7 +110,6 @@ ignore = [
 [tool.ruff.per-file-ignores]
 "__init__.py" = ["F401"]
 "giskit/protocols/quirks.py" = ["E402", "F811"]  # lazy import, duplicate import
-"giskit/providers/pdok.py" = ["E402"]
 "giskit/indexer/monitor.py" = ["F821"]  # requests/httpx issue
 "giskit/core/spatial.py" = ["F821"]  # TYPE_CHECKING forward ref
 

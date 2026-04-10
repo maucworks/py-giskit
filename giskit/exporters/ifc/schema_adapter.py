@@ -3,6 +3,7 @@ Schema adapters for different IFC versions.
 
 Provides abstraction layer for schema-specific differences (IFC2X3, IFC4, IFC4X3).
 """
+
 from typing import Any, Tuple
 
 import ifcopenshell

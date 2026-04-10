@@ -34,15 +34,74 @@ services:
     # Note: v1 endpoint deprecated July 15, 2026
   brk:
     url: https://api.pdok.nl/lv/brk/ogc/v1_0/
-    title: Basisregistratie Kadaster - Kadastrale Kaart
+    title: Basisregistratie Kadaster - Kadastrale Kaart (DEPRECATED)
     category: base_registers
-    description: Cadastral map with parcel boundaries
+    description: Cadastral map with parcel boundaries (OGC Features API discontinued - use brk-percelen-wfs instead)
     keywords:
     - brk
     - kadaster
     - percelen
     - eigendom
     quirks: []
+    # Note: This service is no longer available (404). Use brk-percelen-wfs instead.
+  brk-percelen-wfs:
+    url: https://service.pdok.nl/kadaster/brk-kadastrale-percelen/wfs/v1_0
+    title: BRK Kadastrale Percelen (WFS)
+    category: base_registers
+    description: Cadastral parcels via WFS (recommended replacement for brk)
+    keywords:
+    - brk
+    - kadaster
+    - percelen
+    - cadastral
+    - eigendom
+    quirks: []
+    layers:
+      perceel: cp:cadastralparcel
+  kadastralekaart-wfs:
+    url: https://service.pdok.nl/kadaster/kadastralekaart/wfs/v5_0
+    title: Kadastrale Kaart (WFS v5)
+    category: base_registers
+    description: Cadastral map v5 via WFS - parcels, boundaries, buildings, road names
+    keywords:
+    - brk
+    - kadaster
+    - percelen
+    - kadastrale-kaart
+    - eigendom
+    quirks: []
+    layers:
+      perceel: kadastralekaart:Perceel
+      kadastrale-grens: kadastralekaart:KadastraleGrens
+      bebouwing: kadastralekaart:Bebouwing
+      openbareruimtenaam: kadastralekaart:OpenbareRuimteNaam
+      nummeraanduidingreeks: kadastralekaart:Nummeraanduidingreeks
+  kadastralekaart-ogc:
+    url: https://api.pdok.nl/kadaster/brk-kadastrale-kaart/ogc/v1/
+    title: Kadastrale Kaart Features (OGC API)
+    category: base_registers
+    description: Cadastral map v5 via OGC API Features - parcels, boundaries, buildings, road names
+    keywords:
+    - brk
+    - kadaster
+    - percelen
+    - kadastrale-kaart
+    - ogc-features
+    quirks: []
+  kadastralekaart-wmts:
+    url: https://service.pdok.nl/kadaster/kadastralekaart/wmts/v5_0
+    title: Kadastrale Kaart (WMTS v5)
+    category: maps
+    description: Cadastral map tile service - standard and quality visualisations
+    keywords:
+    - brk
+    - kadaster
+    - kadastralekaart
+    - tiles
+    quirks: []
+    layers:
+      standaard: Kadastralekaart
+      kwaliteit: Kadastralekaart_kwaliteitsvisualisatie
   3d-basisvoorziening:
     url: https://api.pdok.nl/kadaster/3d-basisvoorziening/ogc/v1
     title: 3D Basisvoorziening

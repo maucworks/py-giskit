@@ -1,5 +1,6 @@
 """Recipe execution engine - core business logic for running recipes."""
 
+import asyncio
 import logging
 import re
 from datetime import datetime
@@ -79,7 +80,7 @@ class RecipeRunner:
         bbox: tuple[float, float, float, float],
         progress_callback: Optional[Callable[[str, float], None]] = None,
     ) -> dict[str, gpd.GeoDataFrame]:
-        """Download all datasets specified in the recipe.
+        """Download all datasets specified in the recipe in parallel.
 
         Args:
             bbox: Bounding box in WGS84 (minx, miny, maxx, maxy)
@@ -88,7 +89,7 @@ class RecipeRunner:
         Returns:
             Dictionary mapping layer names to GeoDataFrames
         """
-        layers = {}
+        layers: dict[str, gpd.GeoDataFrame] = {}
 
         # Convert bbox to Location for compatibility
         bbox_location = Location(
@@ -101,39 +102,55 @@ class RecipeRunner:
             output_path = self.recipe_dir / output_path
 
         total_datasets = len(self.recipe.datasets)
+        completed_count = 0
+        lock = asyncio.Lock()
 
-        for i, dataset in enumerate(self.recipe.datasets, 1):
-            if progress_callback:
-                progress = i / total_datasets * 0.9  # Reserve 0.9-1.0 for metadata
-                progress_callback(
-                    f"Downloading dataset {i}/{total_datasets}: {dataset.provider}", progress
-                )
-
-            logger.info(f"Downloading dataset {i}/{total_datasets}: {dataset.provider}")
-
+        async def _download_one(
+            dataset: Dataset,
+        ) -> tuple[str, Optional[gpd.GeoDataFrame]]:
+            """Download a single dataset and return (provider_label, gdf_or_None)."""
+            provider = get_provider(dataset.provider)
+            label = dataset.provider
             try:
-                # Get provider
-                provider = get_provider(dataset.provider)
-
-                # Download dataset
                 gdf = await provider.download_dataset(
                     dataset=dataset,
                     location=bbox_location,
                     output_path=output_path,
                     output_crs=self.recipe.output.crs,
                 )
-
-                if not gdf.empty:
-                    logger.info(f"Downloaded {len(gdf)} features from {dataset.provider}")
-
-                    # Normalize and store layer names
-                    self._normalize_layer_names(layers, gdf, dataset)
-                else:
-                    logger.warning(f"No features found for {dataset.provider}")
-
+                return label, gdf
             except Exception as e:
-                logger.error(f"Failed to download {dataset.provider}: {e}", exc_info=True)
-                # Continue with other datasets
+                logger.error(f"Failed to download {label}: {e}", exc_info=True)
+                return label, None
+
+        async def _tracked_download(dataset: Dataset) -> tuple[str, Optional[gpd.GeoDataFrame]]:
+            """Wrap download with progress reporting."""
+            nonlocal completed_count
+            result = await _download_one(dataset)
+            async with lock:
+                completed_count += 1
+                progress = completed_count / total_datasets * 0.9
+                if progress_callback:
+                    progress_callback(
+                        f"Completed {completed_count}/{total_datasets} datasets", progress
+                    )
+            return result
+
+        if progress_callback:
+            progress_callback(f"Downloading {total_datasets} datasets in parallel...", 0.0)
+
+        # Launch all downloads concurrently
+        results = await asyncio.gather(
+            *(_tracked_download(dataset) for dataset in self.recipe.datasets)
+        )
+
+        # Collect results in recipe order
+        for (label, gdf), dataset in zip(results, self.recipe.datasets, strict=False):
+            if gdf is not None and not gdf.empty:
+                logger.info(f"Downloaded {len(gdf)} features from {label}")
+                self._normalize_layer_names(layers, gdf, dataset)
+            elif gdf is not None:
+                logger.warning(f"No features found for {label}")
 
         return layers
 
@@ -327,11 +344,11 @@ class RecipeRunner:
         }
 
         # Add location-specific fields
-        if location.type.value == "address":
+        if location.type == LocationType.ADDRESS:
             metadata_dict["address"] = [location.value]
             if location.radius is not None:
                 metadata_dict["radius"] = [location.radius]
-        elif location.type.value == "point":
+        elif location.type == LocationType.POINT:
             if location.radius is not None:
                 metadata_dict["radius"] = [location.radius]
 

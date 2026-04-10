@@ -171,7 +171,7 @@ class WFSProtocol(Protocol):
             NotImplementedError: WFS is vector-only
         """
         raise NotImplementedError(
-            "WFS protocol does not support raster coverage. " "Use WCS or WMTS protocol instead."
+            "WFS protocol does not support raster coverage. Use WCS or WMTS protocol instead."
         )
 
     def _wrap_http_error(self, error: httpx.HTTPError, method: str, url: str) -> Exception:

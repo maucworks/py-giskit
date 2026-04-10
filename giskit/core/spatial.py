@@ -310,7 +310,8 @@ async def location_to_bbox(
                 lon, lat = transform_point(lon, lat, location.crs, "EPSG:4326")
 
             # Buffer point to create bbox (in WGS84)
-            assert location.radius is not None, "Radius required for point location"
+            if location.radius is None:
+                raise SpatialError("Radius is required for point location")
             bbox_wgs84 = buffer_point_to_bbox(lon, lat, location.radius)
 
             # Transform to target CRS if needed
@@ -324,7 +325,8 @@ async def location_to_bbox(
             lon, lat = await geocode(address)
 
             # Buffer to create bbox (in WGS84)
-            assert location.radius is not None, "Radius required for address location"
+            if location.radius is None:
+                raise SpatialError("Radius is required for address location")
             bbox_wgs84 = buffer_point_to_bbox(lon, lat, location.radius)
 
             # Transform to target CRS if needed

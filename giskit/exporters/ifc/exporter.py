@@ -180,10 +180,7 @@ class IFCExporter:
                     total_stats[key] = total_stats.get(key, 0) + count
                 logger.info(f"    ✓ Exported {sum(stats.values())} entities")
             except Exception as e:
-                logger.error(f"    ✗ Error: {e}")
-                import traceback
-
-                traceback.print_exc()
+                logger.exception(f"    ✗ Error exporting layer: {e}")
 
         # Write IFC file
         self.ifc.write(str(output_path))

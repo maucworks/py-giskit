@@ -104,7 +104,7 @@ def cmd_discover(args):
             print(
                 f"""
     "{service_id}": {{
-        "url": "{svc['url']}",
+        "url": "{svc["url"]}",
         "title": "TODO: Add title",
         "category": "TODO: Add category",
         "description": "TODO: Add description",

@@ -1,0 +1,19 @@
+# Generic WMTS provider.
+# Use provider: wmts in a recipe to start from this blank template.
+# Add your own services under `services`, following the pdok-wmts.yml format.
+
+provider:
+  name: wmts
+  title: Generic WMTS Provider
+  defaults:
+    protocol: wmts
+
+services:
+  example:
+    url: https://example.com/wmts
+    title: Example WMTS Service (replace with real service)
+    category: imagery
+    description: Placeholder service - replace with a real WMTS endpoint.
+    tile_format: jpeg
+    tile_matrix_set: EPSG:28992
+    layers: {}

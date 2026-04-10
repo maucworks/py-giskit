@@ -15,7 +15,7 @@ the integration between multiple refactored components.
 
 import pytest
 
-from giskit.protocols.registry import get_protocol_registry
+from giskit.protocols.registry import get_registry
 from giskit.providers.base import get_provider
 from giskit.providers.config_driven import ConfigDrivenProvider
 from giskit.providers.wcs import WCSProvider
@@ -59,24 +59,24 @@ class TestPDOKWMTSConfigDrivenProvider:
         assert "luchtfoto" in luchtfoto["keywords"]
 
     @pytest.mark.integration
-    def test_pdok_wmts_get_service_config(self):
-        """Test get_service_config() method from ConfigDrivenProvider."""
+    def test_pdok_wmts_get_service_info(self):
+        """Test get_service_info() method from ConfigDrivenProvider."""
         provider = WMTSProvider("pdok-wmts")
 
         # Use ConfigDrivenProvider method
-        luchtfoto_config = provider.get_service_config("luchtfoto")
+        luchtfoto_config = provider.get_service_info("luchtfoto")
 
         assert luchtfoto_config is not None
         assert luchtfoto_config["title"] == "Luchtfoto Beeldmateriaal Nederland"
         assert "url" in luchtfoto_config
 
     @pytest.mark.integration
-    def test_pdok_wmts_get_service_config_not_found(self):
-        """Test get_service_config() raises error for unknown service."""
+    def test_pdok_wmts_get_service_info_not_found(self):
+        """Test get_service_info() raises error for unknown service."""
         provider = WMTSProvider("pdok-wmts")
 
         with pytest.raises(ValueError, match="not found"):
-            provider.get_service_config("unknown-service")
+            provider.get_service_info("unknown-service")
 
 
 class TestPDOKWCSConfigDrivenProvider:
@@ -116,12 +116,12 @@ class TestPDOKWCSConfigDrivenProvider:
         assert ahn["native_crs"] == "EPSG:28992"
 
     @pytest.mark.integration
-    def test_pdok_wcs_get_service_config(self):
-        """Test get_service_config() method from ConfigDrivenProvider."""
+    def test_pdok_wcs_get_service_info(self):
+        """Test get_service_info() method from ConfigDrivenProvider."""
         provider = WCSProvider("pdok-wcs")
 
         # Use ConfigDrivenProvider method
-        ahn_config = provider.get_service_config("ahn")
+        ahn_config = provider.get_service_info("ahn")
 
         assert ahn_config is not None
         assert ahn_config["title"] == "Actueel Hoogtebestand Nederland (AHN)"
@@ -135,18 +135,18 @@ class TestPDOKProvidersProtocolRegistry:
     @pytest.mark.integration
     def test_wmts_protocol_registered(self):
         """Test that WMTS protocol is registered in global registry."""
-        registry = get_protocol_registry()
+        registry = get_registry()
 
-        protocols = registry.get_available_protocols()
+        protocols = registry.list_protocols()
 
         assert "wmts" in protocols
 
     @pytest.mark.integration
     def test_wcs_protocol_registered(self):
         """Test that WCS protocol is registered in global registry."""
-        registry = get_protocol_registry()
+        registry = get_registry()
 
-        protocols = registry.get_available_protocols()
+        protocols = registry.list_protocols()
 
         assert "wcs" in protocols
 

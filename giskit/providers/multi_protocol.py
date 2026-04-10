@@ -10,6 +10,7 @@ This provider automatically routes requests to the appropriate protocol handler
 based on the service configuration.
 """
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,8 @@ from giskit.config.yaml_utils import load_yaml_safe
 from giskit.core.recipe import Dataset, Location
 from giskit.protocols.base import Protocol
 from giskit.providers.base import Provider
+
+logger = logging.getLogger(__name__)
 
 
 class MultiProtocolProvider(Provider):
@@ -178,13 +181,33 @@ class MultiProtocolProvider(Provider):
         # Get temporal filter from dataset (default to 'latest')
         temporal = dataset.temporal if dataset.temporal else "latest"
 
+        # For WFS: translate user-facing layer names to WFS type names using the layers map.
+        # e.g. "perceel" -> "cp:cadastralparcel" for brk-percelen-wfs
+        layers_to_request = dataset.layers
+        if protocol_name == "wfs":
+            layer_map = service_config.get("layers", {})
+            if layer_map:
+                translated = []
+                for name in dataset.layers or []:
+                    if name in layer_map:
+                        translated.append(layer_map[name])
+                    else:
+                        logger.warning(
+                            "Layer '%s' not found in service '%s' layers map — skipping. "
+                            "Available: %s",
+                            name,
+                            dataset.service,
+                            list(layer_map.keys()),
+                        )
+                layers_to_request = translated if translated else None
+
         # Delegate to protocol handler based on protocol type
         async with protocol:
             if protocol_name in ("ogc-features", "wfs"):
                 # Vector data protocols - use get_features
                 gdf = await protocol.get_features(
                     bbox=bbox,  # type: ignore
-                    layers=dataset.layers,
+                    layers=layers_to_request,
                     crs=output_crs,
                     temporal=temporal,
                     **kwargs,
@@ -326,8 +349,7 @@ class MultiProtocolProvider(Provider):
         """
         if service_id not in self.services:
             raise ValueError(
-                f"Service '{service_id}' not found. "
-                f"Available: {', '.join(self.services.keys())}"
+                f"Service '{service_id}' not found. Available: {', '.join(self.services.keys())}"
             )
 
         return {"name": service_id, **self.services[service_id]}

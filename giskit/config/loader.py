@@ -23,12 +23,15 @@ Usage:
     quirks = load_quirks()
 """
 
+import logging
 from pathlib import Path
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
 from giskit.config.yaml_utils import load_yaml_safe, save_yaml_safe
+
+logger = logging.getLogger(__name__)
 
 # Config file locations
 DEFAULT_CONFIG_DIR = Path(__file__).parent.parent / "config"
@@ -245,7 +248,7 @@ def load_services(
         if data is None:
             # YAML loading failed
             if fallback is not None:
-                print(f"⚠️  Failed to load YAML from {file_path}, using fallback...")
+                logger.warning(f"Failed to load YAML from {file_path}, using fallback")
                 return fallback
             raise ValueError(f"Failed to load YAML from {file_path}")
 
@@ -255,10 +258,9 @@ def load_services(
             return config.get_services_dict()
 
         except ValidationError as e:
-            print(f"⚠️  Config validation error in {file_path}:")
-            print(f"   {e}")
+            logger.warning(f"Config validation error in {file_path}: {e}")
             if fallback is not None:
-                print("   Using fallback...")
+                logger.warning("Using fallback config")
                 return fallback
             raise
 
@@ -267,7 +269,7 @@ def load_services(
         if fallback is not None:
             return fallback
         raise FileNotFoundError(
-            f"Config file not found: {file_path}\n" f"Create it or provide fallback parameter"
+            f"Config file not found: {file_path}\nCreate it or provide fallback parameter"
         )
 
 
@@ -301,7 +303,7 @@ def load_quirks(
             data = load_yaml_safe(file_path)
 
             if data is None:
-                print(f"⚠️  Failed to load YAML from {file_path}")
+                logger.warning(f"Failed to load YAML from {file_path}")
                 if fallback:
                     return fallback
                 continue
@@ -344,7 +346,7 @@ def load_quirks(
                         all_quirks[provider_id][protocol_id] = quirk_def.to_protocol_quirks()
 
             except Exception as e:
-                print(f"⚠️  Error parsing quirks from {file_path}: {e}")
+                logger.warning(f"Error parsing quirks from {file_path}: {e}")
                 if fallback:
                     return fallback
 

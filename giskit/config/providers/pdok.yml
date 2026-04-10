@@ -70,6 +70,54 @@ services:
     protocol: wfs
     layers:
       perceel: cp:cadastralparcel
+  kadastralekaart-wfs:
+    url: https://service.pdok.nl/kadaster/kadastralekaart/wfs/v5_0
+    title: Kadastrale Kaart (WFS v5)
+    category: base_registers
+    description: Cadastral map v5 via WFS - parcels, boundaries, buildings, road names
+    keywords:
+    - brk
+    - kadaster
+    - percelen
+    - kadastrale-kaart
+    - eigendom
+    quirks: []
+    protocol: wfs
+    layers:
+      perceel: kadastralekaart:Perceel
+      kadastrale-grens: kadastralekaart:KadastraleGrens
+      bebouwing: kadastralekaart:Bebouwing
+      openbareruimtenaam: kadastralekaart:OpenbareRuimteNaam
+      nummeraanduidingreeks: kadastralekaart:Nummeraanduidingreeks
+  kadastralekaart-ogc:
+    url: https://api.pdok.nl/kadaster/brk-kadastrale-kaart/ogc/v1/
+    title: Kadastrale Kaart Features (OGC API)
+    category: base_registers
+    description: Cadastral map v5 via OGC API Features - parcels, boundaries, buildings, road names
+    keywords:
+    - brk
+    - kadaster
+    - percelen
+    - kadastrale-kaart
+    - ogc-features
+    quirks: []
+    protocol: ogc-features
+  kadastralekaart-wmts:
+    url: https://service.pdok.nl/kadaster/kadastralekaart/wmts/v5_0
+    title: Kadastrale Kaart (WMTS v5)
+    category: maps
+    description: Cadastral map tile service - standard and quality visualisations
+    keywords:
+    - brk
+    - kadaster
+    - kadastralekaart
+    - tiles
+    tile_format: png
+    tile_matrix_set: EPSG:28992
+    layers:
+      standaard: Kadastralekaart
+      kwaliteit: Kadastralekaart_kwaliteitsvisualisatie
+    protocol: wmts
   3d-basisvoorziening:
     url: https://api.pdok.nl/kadaster/3d-basisvoorziening/ogc/v1
     title: 3D Basisvoorziening
@@ -705,16 +753,17 @@ services:
     layers:
       actueel_8cm: Actueel_orthoHR
       actueel_25cm: Actueel_ortho25
+      2026_quicklook: 2026_quickorthoHR
       2025_8cm: 2025_orthoHR
       2025_25cm: 2025_ortho25
       2024_8cm: 2024_orthoHR
       2024_25cm: 2024_ortho25
     protocol: wmts
   luchtfoto-ir:
-    url: https://service.pdok.nl/hwh/luchtfotoinfrarood/wmts/v1_0
-    title: Luchtfoto Infrarood
+    url: https://service.pdok.nl/hwh/luchtfotocir/wmts/v1_0
+    title: Luchtfoto Infrarood (CIR)
     category: imagery
-    description: Aerial imagery infrared (false color)
+    description: Aerial imagery infrared false-color (CIR - Color InfraRed)
     keywords:
     - luchtfoto
     - infrared
@@ -723,13 +772,18 @@ services:
     tile_format: jpeg
     tile_matrix_set: EPSG:28992
     layers:
-      actueel: Actueel_ortho25IR
+      actueel_25cm: Actueel_ortho25IR
+      actueel_8cm: Actueel_orthoHRIR
+      2025_25cm: 2025_ortho25IR
+      2025_8cm: 2025_orthoHRIR
+      2024_25cm: 2024_ortho25IR
+      2023_25cm: 2023_ortho25IR
     protocol: wmts
   satellite:
     url: https://service.pdok.nl/hwh/satellietbeeld/wmts/v1_0
-    title: Satellietbeelden Nederland
+    title: Satellietbeelden Nederland (VERWIJDERD)
     category: imagery
-    description: Satellite imagery (Sentinel-2)
+    description: Satellite imagery - this service has been removed from PDOK (404). No replacement available.
     keywords:
     - satellite
     - sentinel
@@ -739,3 +793,4 @@ services:
     layers:
       actueel: 2023_ortho25
     protocol: wmts
+    # Note: This service no longer exists (404). Removed from PDOK catalog.

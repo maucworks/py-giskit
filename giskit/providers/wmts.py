@@ -135,7 +135,7 @@ class WMTSProvider(ConfigDrivenProvider):
         if protocol_key not in self.protocols:
             available = list(self.protocols.keys())
             raise ValueError(
-                f"Service layer '{protocol_key}' not found. " f"Available: {', '.join(available)}"
+                f"Service layer '{protocol_key}' not found. Available: {', '.join(available)}"
             )
 
         protocol = self.protocols[protocol_key]

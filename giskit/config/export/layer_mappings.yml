@@ -200,3 +200,140 @@ layer_mappings:
       - label
       - areaValue
       - nationalCadastralReference
+
+  # Kadastrale Kaart v5 (WFS / OGC API) layers
+  kadastralekaart-wfs_perceel:
+    ifc_class: IfcGeographicElement
+    assignment_method: spatial
+    default_height: 0.02
+    name_attribute: identificatieLokaalID
+    pset_name: Pset_KadastraleKaart_Perceel
+    properties:
+      - identificatieLokaalID
+      - identificatieNamespace
+      - kadastraleGemeenteCode
+      - kadastraleGemeenteWaarde
+      - sectie
+      - perceelnummer
+      - kadastraleGrootteWaarde
+      - soortGrootteWaarde
+      - statusHistorieWaarde
+
+  kadastralekaart-wfs_kadastrale_grens:
+    ifc_class: IfcGeographicElement
+    assignment_method: spatial
+    default_height: 0.05
+    name_attribute: identificatieLokaalID
+    pset_name: Pset_KadastraleKaart_Grens
+    properties:
+      - identificatieLokaalID
+      - typeGrensCode
+      - typeGrensWaarde
+      - ClassificatieKwaliteitCode
+      - ClassificatieKwaliteitWaarde
+    color_attributes:
+      - typeGrensWaarde
+
+  kadastralekaart-wfs_bebouwing:
+    ifc_class: IfcBuilding
+    assignment_method: aggregate
+    default_height: 6.0
+    name_attribute: identificatieLokaalID
+    pset_name: Pset_KadastraleKaart_Bebouwing
+    properties:
+      - identificatieLokaalID
+      - identificatieBAGPND
+      - bronhouder
+      - bgt-status
+      - plus-status
+
+  kadastralekaart-wfs_openbare_ruimte_naam:
+    ifc_class: IfcGeographicElement
+    assignment_method: spatial
+    default_height: 0.01
+    name_attribute: tekst
+    pset_name: Pset_KadastraleKaart_OpenbareRuimte
+    properties:
+      - tekst
+      - identificatieLokaalID
+      - identificatieBAGOPR
+      - openbareRuimteType
+      - bronhouder
+
+  kadastralekaart-wfs_nummeraanduidingreeks:
+    ifc_class: IfcGeographicElement
+    assignment_method: spatial
+    default_height: 0.01
+    name_attribute: tekst
+    pset_name: Pset_KadastraleKaart_Nummeraanduiding
+    properties:
+      - tekst
+      - bebouwingID
+      - identificatie_BAGVBOLaagsteHuisnummer
+      - identificatie_BAGVBOHoogsteHuisnummer
+
+  # BGT point/installation object layers
+  bgt_paal:
+    ifc_class: IfcGeographicElement
+    assignment_method: spatial
+    default_height: 0.1
+    name_attribute: lokaal_id
+    pset_name: Pset_BGT_Paal
+    properties:
+      - lokaal_id
+      - type
+      - plus_type
+      - bronhouder
+      - status
+    color_attributes:
+      - type
+      - plus_type
+
+  bgt_put:
+    ifc_class: IfcGeographicElement
+    assignment_method: spatial
+    default_height: 0.05
+    name_attribute: lokaal_id
+    pset_name: Pset_BGT_Put
+    properties:
+      - lokaal_id
+      - type
+      - plus_type
+      - bronhouder
+      - status
+    color_attributes:
+      - type
+      - plus_type
+
+  bgt_overbruggingsdeel:
+    ifc_class: IfcCivilElement
+    assignment_method: spatial
+    default_height: 0.5
+    name_attribute: lokaal_id
+    pset_name: Pset_BGT_Overbruggingsdeel
+    properties:
+      - lokaal_id
+      - type_overbruggingsdeel
+      - hoort_bij_typeoverbrugging
+      - overbrugging_is_beweegbaar
+      - bronhouder
+      - status
+    color_attributes:
+      - type_overbruggingsdeel
+      - hoort_bij_typeoverbrugging
+
+  bgt_gebouwinstallatie:
+    ifc_class: IfcGeographicElement
+    assignment_method: spatial
+    default_height: 0.2
+    name_attribute: lokaal_id
+    pset_name: Pset_BGT_Gebouwinstallatie
+    properties:
+      - lokaal_id
+      - type
+      - plus_type
+      - bronhouder
+      - status
+    color_attributes:
+      - type
+      - plus_type
