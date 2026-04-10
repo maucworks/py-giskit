@@ -9,6 +9,50 @@ import ifcopenshell
 import ifcopenshell.api
 
 
+def sanitize_ifc_name(name: str) -> str:
+    """Sanitize IFC name to avoid Blender crash.
+
+    Blender's BLI_string_split_name_number parses the suffix after the last dot
+    as an integer using std::stoi(). This throws std::out_of_range if:
+    1. Suffix is non-numeric (std::invalid_argument)
+    2. Suffix is too large for 32-bit int (std::out_of_range)
+
+    SIMPLIFIED APPROACH: Replace ALL dots with underscores to completely
+    avoid the int parsing issue. Names like "NL.IMBAG.Pand.123" become "NL_IMBAG_Pand_123".
+
+    Args:
+        name: Original name
+
+    Returns:
+        Sanitized name
+    """
+    name = name.replace(",", "_").replace(" ", "_").replace("-", "_")
+    name = name.replace(".", "_")
+
+    return name
+
+
+def clean_ifc_name(name: str) -> str:
+    """Clean IFC name - replace dots/commas/special chars with underscores.
+
+    This removes ALL dots that might trigger Blender's name parsing.
+    Use for style names, property names, etc.
+
+    Args:
+        name: Original name
+
+    Returns:
+        Cleaned name with only alphanumeric and underscores
+    """
+    name = name.replace(".", "_")
+    name = name.replace(",", "_").replace(" ", "_").replace("-", "_")
+
+    while "__" in name:
+        name = name.replace("__", "_")
+
+    return name.strip("_")
+
+
 class SchemaAdapter:
     """Base class for IFC schema adapters."""
 
@@ -57,25 +101,27 @@ class IFC4Adapter(SchemaAdapter):
 
     def create_road(self, name: str) -> Tuple[Any, str]:
         """Create road as IfcCivilElement in IFC4."""
+        safe_name = sanitize_ifc_name(name)
         road = ifcopenshell.api.run(
-            "root.create_entity", self.ifc, ifc_class="IfcCivilElement", name=name
+            "root.create_entity", self.ifc, ifc_class="IfcCivilElement", name=safe_name
         )
-        # Set ObjectType to indicate it's a road
         road.ObjectType = "Road"
         return road, "container"
 
     def create_bridge(self, name: str) -> Tuple[Any, str]:
         """Create bridge as IfcCivilElement in IFC4."""
+        safe_name = sanitize_ifc_name(name)
         bridge = ifcopenshell.api.run(
-            "root.create_entity", self.ifc, ifc_class="IfcCivilElement", name=name
+            "root.create_entity", self.ifc, ifc_class="IfcCivilElement", name=safe_name
         )
         bridge.ObjectType = "Bridge"
         return bridge, "container"
 
     def create_railway(self, name: str) -> Tuple[Any, str]:
         """Create railway as IfcCivilElement in IFC4."""
+        safe_name = sanitize_ifc_name(name)
         railway = ifcopenshell.api.run(
-            "root.create_entity", self.ifc, ifc_class="IfcCivilElement", name=name
+            "root.create_entity", self.ifc, ifc_class="IfcCivilElement", name=safe_name
         )
         railway.ObjectType = "Railway"
         return railway, "container"
@@ -86,20 +132,25 @@ class IFC4X3Adapter(SchemaAdapter):
 
     def create_road(self, name: str) -> Tuple[Any, str]:
         """Create road as IfcRoad in IFC4X3."""
-        road = ifcopenshell.api.run("root.create_entity", self.ifc, ifc_class="IfcRoad", name=name)
+        safe_name = sanitize_ifc_name(name)
+        road = ifcopenshell.api.run(
+            "root.create_entity", self.ifc, ifc_class="IfcRoad", name=safe_name
+        )
         return road, "aggregate"
 
     def create_bridge(self, name: str) -> Tuple[Any, str]:
         """Create bridge as IfcBridge in IFC4X3."""
+        safe_name = sanitize_ifc_name(name)
         bridge = ifcopenshell.api.run(
-            "root.create_entity", self.ifc, ifc_class="IfcBridge", name=name
+            "root.create_entity", self.ifc, ifc_class="IfcBridge", name=safe_name
         )
         return bridge, "aggregate"
 
     def create_railway(self, name: str) -> Tuple[Any, str]:
         """Create railway as IfcRailway in IFC4X3."""
+        safe_name = sanitize_ifc_name(name)
         railway = ifcopenshell.api.run(
-            "root.create_entity", self.ifc, ifc_class="IfcRailway", name=name
+            "root.create_entity", self.ifc, ifc_class="IfcRailway", name=safe_name
         )
         return railway, "aggregate"
 
@@ -114,24 +165,27 @@ class IFC2X3Adapter(SchemaAdapter):
 
     def create_road(self, name: str) -> Tuple[Any, str]:
         """Create road as IfcBuildingElementProxy in IFC2X3."""
+        safe_name = sanitize_ifc_name(name)
         road = ifcopenshell.api.run(
-            "root.create_entity", self.ifc, ifc_class="IfcBuildingElementProxy", name=name
+            "root.create_entity", self.ifc, ifc_class="IfcBuildingElementProxy", name=safe_name
         )
         road.ObjectType = "Road"
         return road, "container"
 
     def create_bridge(self, name: str) -> Tuple[Any, str]:
         """Create bridge as IfcBuildingElementProxy in IFC2X3."""
+        safe_name = sanitize_ifc_name(name)
         bridge = ifcopenshell.api.run(
-            "root.create_entity", self.ifc, ifc_class="IfcBuildingElementProxy", name=name
+            "root.create_entity", self.ifc, ifc_class="IfcBuildingElementProxy", name=safe_name
         )
         bridge.ObjectType = "Bridge"
         return bridge, "container"
 
     def create_railway(self, name: str) -> Tuple[Any, str]:
         """Create railway as IfcBuildingElementProxy in IFC2X3."""
+        safe_name = sanitize_ifc_name(name)
         railway = ifcopenshell.api.run(
-            "root.create_entity", self.ifc, ifc_class="IfcBuildingElementProxy", name=name
+            "root.create_entity", self.ifc, ifc_class="IfcBuildingElementProxy", name=safe_name
         )
         railway.ObjectType = "Railway"
         return railway, "container"

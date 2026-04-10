@@ -9,6 +9,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import yaml
 
+from .schema_adapter import clean_ifc_name
+
 
 class MaterialsManager:
     """Manages colors and materials from YAML configuration."""
@@ -138,7 +140,7 @@ class MaterialsManager:
         # For BAG3D with surface classification
         if layer_name.startswith("bag3d") and "surface_type" in feature_data:
             surface_type = feature_data.get("surface_type", "default")
-            return f"BAG3D_{surface_type.upper()}"
+            return clean_ifc_name(f"BAG3D_{surface_type.upper()}")
 
         # For layers with specific attribute-based naming
         layer_config = self.get_layer_config(layer_name)
@@ -147,12 +149,11 @@ class MaterialsManager:
         # Try to build name from first color attribute
         if color_attributes and color_attributes[0] in feature_data:
             attr_value = str(feature_data[color_attributes[0]])
-            # Clean up name: replace spaces with underscores, remove special chars
-            clean_name = attr_value.replace(" ", "_").replace("-", "_")
-            return f"{layer_name.upper()}_{clean_name.upper()}"
+            name = f"{layer_name.upper()}_{attr_value.upper()}"
+            return clean_ifc_name(name)
 
         # Default material name
-        return f"{layer_name.upper()}_DEFAULT"
+        return clean_ifc_name(f"{layer_name.upper()}_DEFAULT")
 
     def _normalize_layer_name(self, layer_name: str) -> str:
         """Normalize layer name by stripping common BGT suffixes.
@@ -254,7 +255,8 @@ class MaterialsManager:
             Tuple of (pset_name, properties_list)
         """
         layer_config = self.get_layer_config(layer_name)
-        pset_name = layer_config.get("pset_name", f"Pset_{layer_name}")
+        pset_name = layer_config.get("pset_name", f"Pset.{layer_name}")
+        pset_name = clean_ifc_name(pset_name)
         properties = layer_config.get("properties", [])
         return pset_name, properties
 

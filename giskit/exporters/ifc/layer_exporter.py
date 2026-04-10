@@ -20,7 +20,7 @@ from .geometry import (
     transform_to_relative,
 )
 from .materials import MaterialsManager
-from .schema_adapter import SchemaAdapter
+from .schema_adapter import SchemaAdapter, clean_ifc_name, sanitize_ifc_name
 
 
 class LayerExporter:
@@ -162,9 +162,9 @@ class LayerExporter:
         # Get name
         name_attr = layer_config.get("name_attribute")
         if name_attr and name_attr in feature_data:
-            name = str(feature_data[name_attr])
+            name = sanitize_ifc_name(str(feature_data[name_attr]))
         else:
-            name = f"{layer_name}_{id(feature_data)}"
+            name = sanitize_ifc_name(f"{layer_name}.{id(feature_data)}")
 
         # Create entity
         entity = ifcopenshell.api.run(
@@ -427,7 +427,7 @@ class LayerExporter:
             )
 
             # Create a child IfcBuildingElementProxy for this surface
-            element_name = f"{entity.Name}_{surface_type.lower()}"
+            element_name = sanitize_ifc_name(entity.Name)
             child_element = ifcopenshell.api.run(
                 "root.create_entity",
                 ifc_file,
@@ -478,12 +478,17 @@ class LayerExporter:
         """Add property set to entity."""
         pset_name, properties = self.materials.get_pset_config(layer_name)
 
+        # Clean pset_name to avoid Blender crash
+        pset_name = clean_ifc_name(pset_name)
+
         # Build properties dict
+        # Property names with underscores are fine
         props = {}
         for prop_name in properties:
             if prop_name in feature_data:
                 value = feature_data[prop_name]
                 if value is not None:
+                    # Property names should have underscores (from YAML config)
                     props[prop_name] = str(value)
 
         if props:

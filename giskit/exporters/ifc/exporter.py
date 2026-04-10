@@ -14,7 +14,7 @@ import ifcopenshell.api.owner.settings as owner_settings
 
 from .layer_exporter import LayerExporter
 from .materials import MaterialsManager
-from .schema_adapter import get_schema_adapter
+from .schema_adapter import clean_ifc_name, get_schema_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +134,9 @@ class IFCExporter:
         logger.info(f"Reference point: ({self.ref_x:.2f}, {self.ref_y:.2f})")
         logger.info(f"Z-normalization: {'enabled' if normalize_z else 'disabled'}")
 
+        # Clean site name to avoid Blender crash
+        site_name = clean_ifc_name(site_name)
+
         # Create IFC structure (Site always at 0,0,0 with IfcMapConversion)
         self._create_project(site_name)
         self._create_site(site_name)
@@ -193,6 +196,9 @@ class IFCExporter:
 
     def _create_project(self, site_name: str) -> None:
         """Create IFC Project with metadata."""
+        # Keep underscores in name - Blender only crashes when suffix after LAST dot is non-numeric
+        # Underscores are safe
+
         # Create project using API
         self.project = ifcopenshell.api.run(
             "root.create_entity",
@@ -262,6 +268,10 @@ class IFCExporter:
         Site is always placed at (0, 0, 0) per IFC best practices.
         IfcMapConversion provides the transformation to RD coordinates.
         """
+        # Sanitize name: replace underscores with dots to avoid Blender crash
+        # (Blender's BLI_string_split_name_number crashes on names ending with _letter)
+        # Keep underscores - Blender only crashes when suffix after LAST dot is non-numeric
+
         # Create site
         self.site = ifcopenshell.api.run(
             "root.create_entity", self.ifc, ifc_class="IfcSite", name=site_name
@@ -401,10 +411,13 @@ class IFCExporter:
         # Get owner history for IFC2X3 (required) or None for IFC4+
         owner_history = self._get_owner_history()
 
+        # Clean property set name to avoid Blender crash
+        pset_name = clean_ifc_name("RD_Georeference")
+
         property_set = self.ifc.createIfcPropertySet(
             ifcopenshell.guid.new(),
             owner_history,
-            "RD_Georeference",
+            pset_name,
             "Rijksdriehoek (Amersfoort RD New) reference point",
             property_values,
         )
