@@ -628,17 +628,28 @@ class OutputManager:
 
     @staticmethod
     def _clean_internal_columns(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-        """Remove internal columns before saving.
+        """Remove internal columns before saving and reset index to avoid FID collisions.
+
+        WFS/OGC responses often include a ``fid`` column that conflicts with the
+        GPKG auto-generated FID when GeoPandas writes the DataFrame index.  We
+        drop any source FID columns and reset the index so GDAL assigns clean,
+        sequential FIDs.
 
         Args:
             gdf: GeoDataFrame to clean
 
         Returns:
-            Cleaned GeoDataFrame (copy)
+            Cleaned GeoDataFrame (copy) with a clean sequential index
         """
         save_gdf = gdf.copy()
+        # Drop internal tracking columns
         internal_cols = ["_provider", "_service", "_layer", "_collection"]
-        for col in internal_cols:
-            if col in save_gdf.columns:
-                save_gdf = save_gdf.drop(columns=[col])
+        # Also drop source FID columns that collide with GPKG FID generation
+        fid_cols = ["fid", "FID", "ogc_fid", "gml_id"]
+        drop_cols = internal_cols + fid_cols
+        cols_to_drop = [c for c in drop_cols if c in save_gdf.columns]
+        if cols_to_drop:
+            save_gdf = save_gdf.drop(columns=cols_to_drop)
+        # Reset index so GDAL generates sequential, unique FIDs
+        save_gdf = save_gdf.reset_index(drop=True)
         return save_gdf

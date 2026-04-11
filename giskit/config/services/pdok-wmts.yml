@@ -25,16 +25,27 @@ services:
     layers:
       actueel_8cm: Actueel_orthoHR
       actueel_25cm: Actueel_ortho25
+      2026_quicklook: 2026_quickorthoHR
       2025_8cm: 2025_orthoHR
       2025_25cm: 2025_ortho25
       2024_8cm: 2024_orthoHR
       2024_25cm: 2024_ortho25
+      2023_8cm: 2023_orthoHR
+      2023_25cm: 2023_ortho25
+      2022_8cm: 2022_orthoHR
+      2022_25cm: 2022_ortho25
+      2021_8cm: 2021_orthoHR
+      2020_25cm: 2020_ortho25
+      2019_25cm: 2019_ortho25
+      2018_25cm: 2018_ortho25
+      2017_25cm: 2017_ortho25
+      2016_25cm: 2016_ortho25
 
   luchtfoto-ir:
-    url: https://service.pdok.nl/hwh/luchtfotoinfrarood/wmts/v1_0
-    title: Luchtfoto Infrarood
+    url: https://service.pdok.nl/hwh/luchtfotocir/wmts/v1_0
+    title: Luchtfoto Infrarood (CIR)
     category: imagery
-    description: Aerial imagery infrared (false color)
+    description: Aerial imagery infrared false-color (CIR - Color InfraRed)
     keywords:
       - luchtfoto
       - infrared
@@ -43,36 +54,30 @@ services:
     tile_format: jpeg
     tile_matrix_set: EPSG:28992
     layers:
-      actueel: Actueel_ortho25IR
+      actueel_8cm: Actueel_orthoHRIR
+      actueel_25cm: Actueel_ortho25IR
+      2025_8cm: 2025_orthoHRIR
+      2025_25cm: 2025_ortho25IR
+      2024_25cm: 2024_ortho25IR
+      2023_25cm: 2023_ortho25IR
+      2022_25cm: 2022_ortho25IR
+      2020_25cm: 2020_ortho25IR
+      2019_25cm: 2019_ortho25IR
+      2018_25cm: 2018_ortho25IR
+      2017_25cm: 2017_ortho25IR
+      2016_25cm: 2016_ortho25IR
 
-  satellite:
-    url: https://service.pdok.nl/hwh/satellietbeeld/wmts/v1_0
-    title: Satellietbeelden Nederland
-    category: imagery
-    description: Satellite imagery (Sentinel-2)
-    keywords:
-      - satellite
-      - sentinel
-      - imagery
-    tile_format: png
-    tile_matrix_set: EPSG:28992
-    layers:
-      actueel: 2023_ortho25
+  # satellite: removed - PDOK no longer serves this endpoint (HTTP 404 as of 2026)
 
   brt-achtergrondkaart:
-    url: https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0
-    title: BRT Achtergrondkaart
+    url: https://api.pdok.nl/kadaster/brt-achtergrondkaart/ogc/v1
+    title: BRT Achtergrondkaart (OGC API)
     category: maps
-    description: Background map derived from TOP10NL
+    description: Background map derived from TOP10NL via OGC API (WMTS endpoint removed)
     keywords:
       - brt
       - topography
       - background
       - basemap
-    tile_format: png
-    tile_matrix_set: EPSG:28992
-    layers:
-      standaard: standaard
-      grijs: grijs
-      pastel: pastel
-      water: water
+    protocol: ogc-features
+    # Note: All WMTS versions (v1_0/v2_0/v3_0) return 404. Using OGC API instead.

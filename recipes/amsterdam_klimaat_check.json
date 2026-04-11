@@ -1,6 +1,6 @@
 {
   "name": "Amsterdam Climate Risk Assessment",
-  "description": "Download climate adaptation data (heat stress, flooding, green space) for Amsterdam neighborhood analysis",
+  "description": "Download climate adaptation data (heat stress, flooding, green space, foundation risk) for Amsterdam neighborhood analysis",
   "location": {
     "type": "bbox",
     "value": [
@@ -14,52 +14,38 @@
   "datasets": [
     {
       "provider": "klimaateffectatlas",
+      "service": "buurtdashboard",
+      "layers": ["kea_public:BD_buurtdashboard_20260312"]
+    },
+    {
+      "provider": "klimaateffectatlas",
       "service": "sociale-kwetsbaarheid-hitte",
-      "layers": [
-        "kea_public:sociale_kwetsbaarheid_hitte"
-      ]
+      "layers": ["kea_public:sociale_kwetsbaarheid_hitte"]
     },
     {
       "provider": "klimaateffectatlas",
       "service": "gevoelstemperatuur-buurt",
-      "layers": [
-        "kea_public:GevoelstemperatuurBuurt_2022"
-      ]
-    },
-    {
-      "provider": "klimaateffectatlas",
-      "service": "groen-per-buurt",
-      "layers": [
-        "kea_public:boom_per_buurt27"
-      ]
-    },
-    {
-      "provider": "klimaateffectatlas",
-      "service": "grijs-per-buurt",
-      "layers": [
-        "kea_public:grijs_per_buurt27"
-      ]
-    },
-    {
-      "provider": "klimaateffectatlas",
-      "service": "water-per-buurt",
-      "layers": [
-        "kea_public:water_per_buurt27"
-      ]
+      "layers": ["kea_public:GevoelstemperatuurBuurt_2022"]
     },
     {
       "provider": "klimaateffectatlas",
       "service": "afstand-tot-koelte",
-      "layers": [
-        "kea_public:Afstand_tot_koelte"
-      ]
+      "layers": ["kea_public:Afstand_tot_koelte"]
     },
     {
       "provider": "klimaateffectatlas",
-      "service": "droge-plekken-extreem-kleine-kans",
-      "layers": [
-        "kea_public:Droge_plekken_Extreem_kleine_kans"
-      ]
+      "service": "droge-verdiepingen-extreem-kleine-kans",
+      "layers": ["kea_public:droge_verdiepingen_extreem_kleine_kans_20251120"]
+    },
+    {
+      "provider": "klimaateffectatlas",
+      "service": "kans-grondwateroverlast-2050-hoog",
+      "layers": ["kea_public:kans_grondwateroverlast_2050hoog"]
+    },
+    {
+      "provider": "klimaateffectatlas",
+      "service": "risicopaalrot-huidig",
+      "layers": ["kea_public:risicopaalrot_huidig"]
     }
   ],
   "output": {

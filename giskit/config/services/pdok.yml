@@ -34,16 +34,17 @@ services:
     # Note: v1 endpoint deprecated July 15, 2026
   brk:
     url: https://api.pdok.nl/lv/brk/ogc/v1_0/
-    title: Basisregistratie Kadaster - Kadastrale Kaart (DEPRECATED)
+    title: Basisregistratie Kadaster - OGC API (VERWIJDERD)
     category: base_registers
-    description: Cadastral map with parcel boundaries (OGC Features API discontinued - use brk-percelen-wfs instead)
+    description: REMOVED - OGC Features API for BRK returns 404. Use brk-percelen-wfs or kadastralekaart-ogc instead.
     keywords:
     - brk
     - kadaster
     - percelen
     - eigendom
     quirks: []
-    # Note: This service is no longer available (404). Use brk-percelen-wfs instead.
+    disabled: true
+    # Note: 404 as of 2026. Use brk-percelen-wfs or kadastralekaart-ogc.
   brk-percelen-wfs:
     url: https://service.pdok.nl/kadaster/brk-kadastrale-percelen/wfs/v1_0
     title: BRK Kadastrale Percelen (WFS)
