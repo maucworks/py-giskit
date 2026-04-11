@@ -12,11 +12,12 @@ based on the service configuration.
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 import geopandas as gpd
 
 from giskit.config.yaml_utils import load_yaml_safe
+from giskit.core.raster import RasterResult
 from giskit.core.recipe import Dataset, Location
 from giskit.protocols.base import Protocol
 from giskit.providers.base import Provider
@@ -128,7 +129,7 @@ class MultiProtocolProvider(Provider):
         output_path: Path,
         output_crs: str = "EPSG:4326",
         **kwargs: Any,
-    ) -> gpd.GeoDataFrame:
+    ) -> Union[gpd.GeoDataFrame, RasterResult]:
         """Download a dataset using the appropriate protocol.
 
         Args:
@@ -139,7 +140,8 @@ class MultiProtocolProvider(Provider):
             **kwargs: Additional options
 
         Returns:
-            GeoDataFrame with downloaded data
+            GeoDataFrame with downloaded vector data, or RasterResult for
+            raster protocols (WMTS/WCS).
 
         Raises:
             ValueError: If service not found or protocol not supported
@@ -156,13 +158,12 @@ class MultiProtocolProvider(Provider):
         service_config = self.services[dataset.service]
         protocol_name = service_config.get("protocol", "ogc-features")
 
-        # Check if protocol requires specialized provider
-        if protocol_name in ("wcs", "wmts"):
-            provider_suffix = f"-{protocol_name}"
-            raise NotImplementedError(
-                f"Service '{dataset.service}' uses {protocol_name.upper()} protocol which requires "
-                f"a specialized provider. Please use 'provider: {self.name}{provider_suffix}' "
-                f"instead of 'provider: {self.name}' in your recipe."
+        # Delegate raster protocols to their specialized provider transparently.
+        # WMTSProvider and WCSProvider have their own init logic (protocol instances,
+        # layer key mapping) that would be duplicated if reimplemented here.
+        if protocol_name in ("wmts", "wcs"):
+            return await self._delegate_raster(
+                protocol_name, dataset, location, output_path, output_crs, **kwargs
             )
 
         # Get or create protocol handler
@@ -228,14 +229,113 @@ class MultiProtocolProvider(Provider):
                     **kwargs,
                 )
             else:
-                # For other protocols (WCS, WMTS), delegate to specialized providers
-                # These protocols need more complex handling (raster data, tiling, etc.)
+                # For other protocols (GTFS, CSV, etc.) raise clearly
                 raise NotImplementedError(
                     f"Download for {protocol_name} protocol should use specialized provider classes "
                     f"(WCSProvider, WMTSProvider) rather than MultiProtocolProvider"
                 )
 
         return gdf
+
+    async def _delegate_raster(
+        self,
+        protocol_name: str,
+        dataset: Dataset,
+        location: Location,
+        output_path: Path,
+        output_crs: str,
+        **kwargs: Any,
+    ) -> Union[gpd.GeoDataFrame, RasterResult]:
+        """Transparently delegate wmts/wcs downloads to the specialized provider.
+
+        Builds a synthetic dataset whose service key matches the specialized
+        provider's expected ``"service_name.layer_key"`` format, then hands off
+        to WMTSProvider / WCSProvider so that all tiling, layer-key mapping,
+        and RasterResult construction is handled in one place.
+
+        Args:
+            protocol_name: "wmts" or "wcs"
+            dataset: Original dataset from the recipe
+            location: Location specification
+            output_path: Output path
+            output_crs: Target CRS
+            **kwargs: Extra options forwarded to the specialized provider
+
+        Returns:
+            RasterResult from the specialized provider
+        """
+        from giskit.providers.base import get_provider
+
+        # The specialized provider is registered as "<name>-<protocol>", e.g. "pdok-wmts"
+        specialized_name = f"{self.name}-{protocol_name}"
+
+        service_config = self.services[dataset.service or ""]
+
+        # WMTSProvider expects dataset.service == "service_name.layer_key"
+        # The recipe supplies service="luchtfoto", layers=["actueel_8cm"]
+        # → build "luchtfoto.actueel_8cm"
+        if protocol_name == "wmts":
+            layers = dataset.layers or []
+            layer_keys = []
+            available_layers = service_config.get("layers", {})
+            for layer_key in layers:
+                # If user gave a friendly key that maps to a WMTS layer name, use it directly
+                if layer_key in available_layers or not available_layers:
+                    layer_keys.append(layer_key)
+                else:
+                    logger.warning(
+                        "WMTS layer key '%s' not found in service '%s'. Available: %s",
+                        layer_key,
+                        dataset.service,
+                        list(available_layers.keys()),
+                    )
+
+            results = []
+            for layer_key in layer_keys:
+                synthetic_service = f"{dataset.service}.{layer_key}"
+                synthetic_dataset = dataset.model_copy(
+                    update={"service": synthetic_service, "layers": [layer_key]}
+                )
+                provider = get_provider(specialized_name)
+                result = await provider.download_dataset(
+                    dataset=synthetic_dataset,
+                    location=location,
+                    output_path=output_path,
+                    output_crs=output_crs,
+                    **kwargs,
+                )
+                results.append(result)
+
+            # Return single result or last result (multi-layer WMTS not yet merged)
+            if len(results) == 1:
+                return results[0]
+            if results:
+                return results[-1]
+            raise ValueError(f"No WMTS layers downloaded for service '{dataset.service}'")
+
+        # WCSProvider expects dataset.service == "service_name.coverage_key"
+        if protocol_name == "wcs":
+            coverages = dataset.layers or list(service_config.get("coverages", {}).keys())
+            if not coverages:
+                raise ValueError(f"No coverage specified for WCS service '{dataset.service}'")
+
+            coverage_key = coverages[0]
+            synthetic_service = f"{dataset.service}.{coverage_key}"
+            synthetic_dataset = dataset.model_copy(
+                update={"service": synthetic_service, "layers": [coverage_key]}
+            )
+            provider = get_provider(specialized_name)
+            return await provider.download_dataset(
+                dataset=synthetic_dataset,
+                location=location,
+                output_path=output_path,
+                output_crs=output_crs,
+                **kwargs,
+            )
+
+        raise NotImplementedError(
+            f"Raster delegation not implemented for protocol '{protocol_name}'"
+        )
 
     def _create_protocol_handler(
         self, protocol_name: str, service_config: dict[str, Any], service_id: str | None = None
