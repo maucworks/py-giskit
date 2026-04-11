@@ -202,6 +202,15 @@ class OutputManager:
             save_gdf.to_file(output_path, driver="GPKG", layer=layer_name)
             total_features += len(save_gdf)
 
+        # Write raster bounding boxes as vector layers so GPKG contains a
+        # spatial footprint for each raster layer (useful in QGIS / desktop GIS).
+        if raster_layers:
+            for layer_name, raster in raster_layers.items():
+                bbox_gdf = self._raster_to_bbox_gdf(layer_name, raster)
+                bbox_layer_name = f"_raster_{layer_name}"
+                bbox_gdf.to_file(output_path, driver="GPKG", layer=bbox_layer_name)
+                logger.info("Saved raster bbox layer: %s", bbox_layer_name)
+
         if progress_callback:
             progress_callback(
                 f"Successfully saved {total_features} features in {len(layers)} layers to {output_path}",
@@ -673,6 +682,41 @@ class OutputManager:
             logger.error(f"OBJ export failed: {e}", exc_info=True)
             if progress_callback:
                 progress_callback(f"OBJ export failed: {e}", "error")
+
+    @staticmethod
+    def _raster_to_bbox_gdf(layer_name: str, raster: RasterResult) -> gpd.GeoDataFrame:
+        """Convert a RasterResult to a single-row GeoDataFrame with its bbox polygon.
+
+        The polygon is in EPSG:28992 (RD New) and carries metadata attributes
+        (pixel dimensions, pixel size, source CRS) so the layer is self-describing
+        when opened in QGIS or ArcGIS.
+
+        Args:
+            layer_name: Name used for the raster layer.
+            raster: RasterResult to convert.
+
+        Returns:
+            Single-row GeoDataFrame with CRS EPSG:28992.
+        """
+        from shapely.geometry import box
+
+        minx, miny, maxx, maxy = raster.bbox_rd
+        geom = box(minx, miny, maxx, maxy)
+        gdf = gpd.GeoDataFrame(
+            {
+                "layer_name": [layer_name],
+                "width_px": [raster.image.width],
+                "height_px": [raster.image.height],
+                "pixel_size_x_m": [round(raster.pixel_size_x, 4)],
+                "pixel_size_y_m": [round(raster.pixel_size_y, 4)],
+                "width_m": [round(raster.width_m, 2)],
+                "height_m": [round(raster.height_m, 2)],
+                "source_crs": [raster.source_crs],
+                "geometry": [geom],
+            },
+            crs="EPSG:28992",
+        )
+        return gdf
 
     @staticmethod
     def _clean_internal_columns(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
