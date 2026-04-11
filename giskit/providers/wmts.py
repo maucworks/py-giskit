@@ -5,7 +5,7 @@ pre-rendered raster tiles like:
 - Aerial imagery (orthophotos/luchtfoto's)
 - Satellite imagery
 - Background maps
-- Other pre-rendered tile layers
+- Other pre-rendered tile pyramids
 
 For other protocols, use:
 - OGCFeaturesProvider for vector data (OGC API Features)
@@ -24,15 +24,12 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 import geopandas as gpd
 
-from giskit.core.constants import (
-    JPEG_EXPORT_QUALITY,
-    JPEG_OPTIMIZE,
-    WMTS_DEFAULT_RESOLUTION_M,
-)
+from giskit.core.constants import WMTS_DEFAULT_RESOLUTION_M
+from giskit.core.raster import RasterResult
 from giskit.core.recipe import Dataset, Location
 from giskit.protocols.wmts import WMTSProtocol
 from giskit.providers.base import register_provider
@@ -98,22 +95,22 @@ class WMTSProvider(ConfigDrivenProvider):
         output_path: Path,
         output_crs: str = "EPSG:28992",
         **kwargs: Any,
-    ) -> gpd.GeoDataFrame:
+    ) -> Union[RasterResult, gpd.GeoDataFrame]:
         """Download a dataset (imagery) for a specific location.
 
         Args:
             dataset: Dataset specification from recipe
             location: Location specification from recipe
-            output_path: Where to save downloaded data (image file)
+            output_path: Where to save downloaded data (used only for directory)
             output_crs: Output coordinate reference system (default: EPSG:28992)
             **kwargs: Additional download options:
                 - zoom: Explicit zoom level (optional)
-                - resolution: Target resolution in meters/pixel (optional)
-                - layer: Specific layer name like "actueel_25cm" (optional)
+                - resolution: Target resolution in metres/pixel (optional)
                 - progress_callback: Callback function for progress updates
 
         Returns:
-            Empty GeoDataFrame (WMTS returns images, not vector data)
+            RasterResult containing the stitched PIL Image and georeferencing
+            info.  Saving to disk is delegated to OutputManager.
 
         Raises:
             ValueError: If service or layer not found
@@ -146,13 +143,13 @@ class WMTSProvider(ConfigDrivenProvider):
         # Get bbox in WGS84 first
         bbox_wgs84 = await location_to_bbox(location, "EPSG:4326")
 
-        # Transform to output CRS if needed
+        # Transform to output CRS (RD New by default) for tile fetching
         if output_crs != "EPSG:4326":
             from giskit.core.spatial import transform_bbox
 
-            bbox = transform_bbox(bbox_wgs84, "EPSG:4326", output_crs)
+            bbox_rd = transform_bbox(bbox_wgs84, "EPSG:4326", output_crs)
         else:
-            bbox = bbox_wgs84
+            bbox_rd = bbox_wgs84
 
         # Extract WMTS-specific parameters
         zoom = kwargs.get("zoom")
@@ -162,51 +159,24 @@ class WMTSProvider(ConfigDrivenProvider):
         # Download imagery using WMTS protocol
         async with protocol:
             image = await protocol.get_coverage(
-                bbox=bbox,  # type: ignore
+                bbox=bbox_rd,  # type: ignore
                 product=layer_key,
-                resolution=resolution or WMTS_DEFAULT_RESOLUTION_M,
+                resolution=float(resolution or WMTS_DEFAULT_RESOLUTION_M),
                 crs=output_crs,
                 zoom=zoom,
                 progress_callback=progress_callback,
             )
 
-        # Save if output path provided
-        if output_path:
-            # WMTS returns raster images, not vector data
-            # Change extension from .gpkg to appropriate image format
-            if output_path.suffix.lower() in [".gpkg", ".geojson", ".shp"]:
-                # Replace vector format with image format, keeping the base name and directory
-                image_format = self.services[service_name].get("tile_format", "jpeg")
-                extension = ".jpg" if image_format == "jpeg" else f".{image_format}"
-                # Keep directory and base name, just change extension
-                output_path = output_path.parent / (output_path.stem + "_aerial" + extension)
+        # Build a canonical layer name: "luchtfoto_actueel_25cm"
+        layer_name = protocol_key.replace(".", "_").replace("-", "_")
 
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Determine format from extension or use service config
-            if output_path.suffix.lower() in [".jpg", ".jpeg"]:
-                image.save(
-                    str(output_path),
-                    format="JPEG",
-                    quality=JPEG_EXPORT_QUALITY,
-                    optimize=JPEG_OPTIMIZE,
-                )
-            elif output_path.suffix.lower() == ".png":
-                image.save(str(output_path), format="PNG", optimize=True)
-            elif output_path.suffix.lower() == ".tif":
-                image.save(str(output_path), format="TIFF")
-            else:
-                # Default to JPEG
-                image.save(
-                    str(output_path),
-                    format="JPEG",
-                    quality=JPEG_EXPORT_QUALITY,
-                    optimize=JPEG_OPTIMIZE,
-                )
-
-        # WMTS returns images, not vector data
-        # Return empty GeoDataFrame for now
-        return gpd.GeoDataFrame()
+        return RasterResult(
+            layer_name=layer_name,
+            image=image,
+            bbox_rd=tuple(bbox_rd),  # type: ignore[arg-type]
+            bbox_wgs84=tuple(bbox_wgs84),  # type: ignore[arg-type]
+            source_crs=output_crs,
+        )
 
     def get_supported_protocols(self) -> list[str]:
         """Get list of supported protocols.

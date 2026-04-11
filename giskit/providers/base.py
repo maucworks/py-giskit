@@ -12,12 +12,15 @@ Each provider can support multiple protocols (e.g., PDOK supports OGC Features, 
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import geopandas as gpd
 
 from giskit.core.recipe import Dataset, Location
 from giskit.protocols.base import Protocol
+
+if TYPE_CHECKING:
+    from giskit.core.raster import RasterResult
 
 
 class Provider(ABC):
@@ -59,7 +62,7 @@ class Provider(ABC):
         output_path: Path,
         output_crs: str = "EPSG:4326",
         **kwargs: Any,
-    ) -> gpd.GeoDataFrame:
+    ) -> "Union[gpd.GeoDataFrame, RasterResult]":
         """Download a dataset for a specific location.
 
         Args:
@@ -70,7 +73,8 @@ class Provider(ABC):
             **kwargs: Additional download options
 
         Returns:
-            GeoDataFrame with downloaded data
+            GeoDataFrame with downloaded vector data, or RasterResult for
+            raster providers (WMTS imagery, WCS elevation).
 
         Raises:
             ValueError: If dataset configuration is invalid

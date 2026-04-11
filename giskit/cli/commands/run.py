@@ -24,7 +24,7 @@ async def _execute_recipe(recipe: Recipe, recipe_dir: Path, console: Console, ve
         verbose: Verbose logging
 
     Returns:
-        Dictionary mapping layer names to GeoDataFrames
+        Tuple of (vector_layers, raster_layers) or None
     """
     # Create runner
     runner = RecipeRunner(recipe, recipe_dir)
@@ -45,15 +45,18 @@ async def _execute_recipe(recipe: Recipe, recipe_dir: Path, console: Console, ve
             current_status = None
 
     # Execute recipe
-    layers = await runner.execute(progress_callback if not verbose else None)
+    result = await runner.execute(progress_callback if not verbose else None)
 
     # Print verbose output if requested
-    if verbose and layers:
+    if verbose and result is not None:
+        layers, raster_layers = result
         console.print("\n[bold]Downloaded Layers:[/bold]")
         for layer_name, gdf in layers.items():
             console.print(f"  {layer_name}: {len(gdf)} features")
+        for layer_name in raster_layers:
+            console.print(f"  {layer_name}: [raster]")
 
-    return layers
+    return result
 
 
 @click.command()
@@ -120,12 +123,12 @@ def run(recipe_path: Path, verbose: bool, dry_run: bool, log_level: str) -> None
         console.print("\n[bold]Executing recipe...[/bold]")
 
         try:
-            # Run async download - returns dict of layer_name -> GeoDataFrame
-            layers = asyncio.run(_execute_recipe(recipe, recipe_path.parent, console, verbose))
+            # Run async download - returns (vector_layers, raster_layers) tuple
+            result = asyncio.run(_execute_recipe(recipe, recipe_path.parent, console, verbose))
 
-            # Save to output file
             # Save to output file using OutputManager
-            if layers is not None and len(layers) > 0:
+            if result is not None:
+                layers, raster_layers = result
                 output_manager = OutputManager(recipe, recipe_path.parent)
 
                 # Define progress callback for console output
@@ -140,7 +143,10 @@ def run(recipe_path: Path, verbose: bool, dry_run: bool, log_level: str) -> None
                         console.print(f"  {message}")
 
                 try:
-                    output_manager.save_layers(layers, output_progress)
+                    if layers:
+                        output_manager.save_layers(layers, output_progress)
+                    if raster_layers:
+                        output_manager.save_raster_layers(raster_layers, output_progress)
                 except ImportError as e:
                     console.print(f"[red]✗[/red] Export failed: {e}")
                     if verbose:

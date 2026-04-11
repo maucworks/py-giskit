@@ -7,6 +7,7 @@ from typing import Callable, Optional
 
 import geopandas as gpd
 
+from giskit.core.raster import RasterResult
 from giskit.core.recipe import Recipe
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,102 @@ class OutputManager:
             raise ValueError(f"Unsupported output format: {output_format}")
 
         return output_path
+
+    def save_raster_layers(
+        self,
+        raster_layers: dict[str, RasterResult],
+        progress_callback: Optional[Callable[[str, str], None]] = None,
+    ) -> list[Path]:
+        """Save raster layers to GeoTIFF and JPEG files.
+
+        For each :class:`~giskit.core.raster.RasterResult`, two files are written:
+
+        - ``{output_stem}_{layer_name}.tif``  — GeoTIFF with full georeferencing
+        - ``{output_stem}_{layer_name}.jpg``  — JPEG for quick visual inspection
+
+        The GeoTIFF uses the bbox in RD New (EPSG:28992) for its geotransform so
+        it can be opened directly in QGIS, ArcGIS, or any GDAL-based tool.
+
+        Args:
+            raster_layers: Mapping of layer name → RasterResult.
+            progress_callback: Optional callback(message, level) where level is
+                               "info", "success", "warning", or "error".
+
+        Returns:
+            List of Paths to the files that were written (both .tif and .jpg per layer).
+
+        Raises:
+            ImportError: If rasterio or Pillow are not installed.
+        """
+        try:
+            import rasterio
+            from rasterio.transform import from_bounds
+        except ImportError as e:
+            raise ImportError(
+                "Saving GeoTIFF requires rasterio. Install with: pip install rasterio"
+            ) from e
+
+        import numpy as np
+
+        # Resolve base output path (strip extension — we'll use stem + layer + new ext)
+        output_path = self.recipe.output.path
+        if not output_path.is_absolute():
+            output_path = self.recipe_dir / output_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        stem = output_path.stem
+
+        written: list[Path] = []
+
+        for layer_name, raster in raster_layers.items():
+            img = raster.image
+            minx, miny, maxx, maxy = raster.bbox_rd
+            crs_str = raster.source_crs
+
+            width, height = img.size
+
+            # ---- GeoTIFF ------------------------------------------------
+            tif_path = output_path.parent / f"{stem}_{layer_name}.tif"
+            transform = from_bounds(minx, miny, maxx, maxy, width, height)
+
+            # Convert PIL RGB image to numpy array (H, W, 3)
+            arr = np.array(img)
+
+            with rasterio.open(
+                str(tif_path),
+                "w",
+                driver="GTiff",
+                height=height,
+                width=width,
+                count=3,
+                dtype=arr.dtype,
+                crs=crs_str,
+                transform=transform,
+                compress="lzw",
+            ) as dst:
+                # rasterio expects (bands, rows, cols)
+                dst.write(arr[:, :, 0], 1)
+                dst.write(arr[:, :, 1], 2)
+                dst.write(arr[:, :, 2], 3)
+
+            written.append(tif_path)
+            if progress_callback:
+                size_mb = tif_path.stat().st_size / (1024 * 1024)
+                progress_callback(f"Saved GeoTIFF: {tif_path.name} ({size_mb:.1f} MB)", "success")
+
+            # ---- JPEG ---------------------------------------------------
+            jpg_path = output_path.parent / f"{stem}_{layer_name}.jpg"
+            # Ensure RGB before saving as JPEG (no alpha)
+            rgb_img = img.convert("RGB")
+            rgb_img.save(str(jpg_path), format="JPEG", quality=95, optimize=True)
+
+            written.append(jpg_path)
+            if progress_callback:
+                size_mb = jpg_path.stat().st_size / (1024 * 1024)
+                progress_callback(f"Saved JPEG:    {jpg_path.name} ({size_mb:.1f} MB)", "success")
+
+            logger.info("Raster layer '%s' saved: %s + %s", layer_name, tif_path, jpg_path)
+
+        return written
 
     def _save_gpkg(
         self,

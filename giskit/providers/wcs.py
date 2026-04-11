@@ -25,10 +25,12 @@ Examples:
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 import geopandas as gpd
+import numpy as np
 
+from giskit.core.raster import RasterResult
 from giskit.core.recipe import Dataset, Location, LocationType
 from giskit.protocols.wcs import WCSProtocol
 from giskit.providers.base import register_provider
@@ -36,12 +38,78 @@ from giskit.providers.config_driven import ConfigDrivenProvider
 
 logger = logging.getLogger(__name__)
 
+# Colour palette for elevation: low=blue, mid=green, high=red (viridis-ish)
+_ELEVATION_COLORMAP = [
+    (0.267, 0.004, 0.329),  # deep purple  (very low)
+    (0.282, 0.412, 0.639),  # blue
+    (0.157, 0.620, 0.557),  # teal
+    (0.486, 0.780, 0.345),  # green
+    (0.980, 0.902, 0.141),  # yellow
+    (0.988, 0.612, 0.122),  # orange
+    (0.988, 0.302, 0.165),  # red-orange  (very high)
+]
+
+
+def _elevation_to_pil_image(array: np.ndarray):  # type: ignore[return]
+    """Convert a 2-D elevation numpy array to a RGB PIL Image.
+
+    Nodata values (NaN or <= -9999) are rendered as transparent grey.
+
+    Args:
+        array: 2-D float array of elevation values (metres).
+
+    Returns:
+        PIL Image in RGB mode.
+    """
+    from PIL import Image
+
+    # Mask nodata
+    nodata_mask = np.isnan(array) | (array <= -9999)
+    valid = array[~nodata_mask]
+
+    if valid.size == 0:
+        # All nodata — return grey image
+        h, w = array.shape
+        return Image.new("RGB", (w, h), (128, 128, 128))
+
+    vmin, vmax = float(valid.min()), float(valid.max())
+    if vmax == vmin:
+        vmax = vmin + 1.0  # prevent division by zero
+
+    h, w = array.shape
+    rgb = np.zeros((h, w, 3), dtype=np.uint8)
+
+    n_stops = len(_ELEVATION_COLORMAP) - 1
+    for y in range(h):
+        for x in range(w):
+            if nodata_mask[y, x]:
+                rgb[y, x] = (128, 128, 128)
+            else:
+                t = (float(array[y, x]) - vmin) / (vmax - vmin)
+                t = max(0.0, min(1.0, t))
+                idx = t * n_stops
+                lo = int(idx)
+                hi = min(lo + 1, n_stops)
+                frac = idx - lo
+                c0 = _ELEVATION_COLORMAP[lo]
+                c1 = _ELEVATION_COLORMAP[hi]
+                r = int((c0[0] + (c1[0] - c0[0]) * frac) * 255)
+                g = int((c0[1] + (c1[1] - c0[1]) * frac) * 255)
+                b = int((c0[2] + (c1[2] - c0[2]) * frac) * 255)
+                rgb[y, x] = (r, g, b)
+
+    return Image.fromarray(rgb, "RGB")
+
 
 class WCSProvider(ConfigDrivenProvider):
     """WCS provider for coverage/elevation data.
 
     Loads services from YAML config files, making it work with any provider
     that offers WCS endpoints (raster coverage data).
+
+    ``download_dataset()`` now returns a :class:`~giskit.core.raster.RasterResult`
+    instead of a metadata GeoDataFrame.  Saving the GeoTIFF and JPEG is
+    delegated to :class:`~giskit.core.output.OutputManager`.
 
     Supports:
     - WCS (Web Coverage Service)
@@ -104,22 +172,23 @@ class WCSProvider(ConfigDrivenProvider):
         output_path: Path,
         output_crs: str = "EPSG:4326",
         **kwargs: Any,
-    ) -> gpd.GeoDataFrame:
+    ) -> Union[RasterResult, gpd.GeoDataFrame]:
         """Download a dataset for a specific location.
 
         Args:
             dataset: Dataset specification from recipe
             location: Location specification from recipe
-            output_path: Where to save downloaded data
+            output_path: Where to save downloaded data (directory used for
+                         intermediate files; final saving done by OutputManager)
             output_crs: Output coordinate reference system
             **kwargs: Additional download options (e.g., resolution, format)
 
         Returns:
-            GeoDataFrame with downloaded coverage data metadata
+            RasterResult with the elevation PIL Image and bbox georeferencing.
 
         Raises:
             ValueError: If service not found
-            NotImplementedError: Protocol not yet implemented
+            NotImplementedError: Protocol not yet implemented for this location type
         """
         # Parse dataset name: "service.coverage" (e.g., "ahn.dtm", "ahn.dsm")
         service_name = dataset.service or ""
@@ -140,8 +209,7 @@ class WCSProvider(ConfigDrivenProvider):
         # Get protocol
         protocol = self.protocols[protocol_key]
 
-        # For now, assume location is already a bbox in EPSG:28992
-        # TODO: Add proper location conversion for other types
+        # For now, only bbox locations are supported for WCS
         if location.type != LocationType.BBOX:
             raise NotImplementedError(
                 f"Location type '{location.type.value}' not yet supported for WCS. "
@@ -151,59 +219,61 @@ class WCSProvider(ConfigDrivenProvider):
         if not isinstance(location.value, list) or len(location.value) != 4:
             raise ValueError("Location value must be [minx, miny, maxx, maxy] for bbox")
 
-        # Extract bbox values (location.value is Union[str, list[float], list[list[float]]])
+        # Extract bbox values
         bbox_values = location.value
         if not all(isinstance(v, (int, float)) for v in bbox_values):
             raise ValueError("All bbox values must be numbers")
 
-        bbox: tuple[float, float, float, float] = (
-            bbox_values[0],  # type: ignore
-            bbox_values[1],  # type: ignore
-            bbox_values[2],  # type: ignore
-            bbox_values[3],  # type: ignore
+        bbox_rd: tuple[float, float, float, float] = (
+            float(bbox_values[0]),  # type: ignore[arg-type]
+            float(bbox_values[1]),  # type: ignore[arg-type]
+            float(bbox_values[2]),  # type: ignore[arg-type]
+            float(bbox_values[3]),  # type: ignore[arg-type]
         )
+
+        # Transform bbox to WGS84 for the RasterResult metadata
+        from giskit.core.spatial import transform_bbox
+
+        try:
+            bbox_wgs84 = transform_bbox(bbox_rd, "EPSG:28992", "EPSG:4326")
+        except Exception:
+            bbox_wgs84 = bbox_rd  # fallback: keep as-is
 
         # Get resolution from dataset or use default
         resolution = dataset.resolution or protocol.native_resolution or 0.5
 
-        # Create output filename
-        coverage_name = protocol_key.replace(".", "_")
-        output_file = output_path / f"{coverage_name}.tif"
-
-        # Download coverage as GeoTIFF
         logger.info(f"Downloading {protocol_key}...")
         logger.debug(f"  Resolution: {resolution}m")
-        logger.debug(f"  Bbox: {bbox}")
+        logger.debug(f"  Bbox: {bbox_rd}")
 
-        def progress(msg: str, pct: float):
-            """Simple progress callback."""
+        def _progress(msg: str, pct: float) -> None:
             logger.debug(f"  [{pct * 100:.0f}%] {msg}")
 
-        saved_path = await protocol.save_coverage_as_geotiff(
-            bbox=bbox,
-            output_path=output_file,
-            resolution=resolution,
-            crs="EPSG:28992",
-            progress_callback=progress,
+        # Download the raw elevation array via the protocol
+        async with protocol:
+            array = await protocol.get_coverage(
+                bbox=bbox_rd,
+                product=protocol_key,
+                resolution=resolution,
+                crs="EPSG:28992",
+                progress_callback=_progress,
+            )
+
+        logger.info(f"Downloaded {protocol_key}: shape={array.shape}")
+
+        # Convert elevation array to a false-colour PIL Image for visualisation
+        image = _elevation_to_pil_image(array)
+
+        # Build canonical layer name: "ahn_dtm"
+        layer_name = protocol_key.replace(".", "_").replace("-", "_")
+
+        return RasterResult(
+            layer_name=layer_name,
+            image=image,
+            bbox_rd=bbox_rd,
+            bbox_wgs84=tuple(bbox_wgs84),  # type: ignore[arg-type]
+            source_crs="EPSG:28992",
         )
-
-        logger.info(f"Saved to: {saved_path}")
-
-        # Return GeoDataFrame with metadata
-        # (WCS returns raster data, but we return metadata as GeoDataFrame for consistency)
-        from shapely.geometry import box
-
-        gdf = gpd.GeoDataFrame(
-            {
-                "coverage": [protocol_key],
-                "file": [str(saved_path)],
-                "resolution": [resolution],
-            },
-            geometry=[box(*bbox)],
-            crs="EPSG:28992",
-        )
-
-        return gdf
 
     def get_supported_protocols(self) -> list[str]:
         """Get list of supported protocols.

@@ -15,13 +15,20 @@ Installation:
 """
 
 import gzip
+import io
+import logging
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import ifcopenshell
 import ifcopenshell.geom
 import numpy as np
 import pygltflib
+
+if TYPE_CHECKING:
+    from giskit.core.raster import RasterResult
+
+logger = logging.getLogger(__name__)
 
 
 class GLBExporter:
@@ -81,8 +88,8 @@ class GLBExporter:
         if not self.is_available():
             raise RuntimeError(self.get_install_instructions())
 
-        print(f"Converting IFC to GLB: {ifc_path} → {glb_path}")
-        print("  Using ifcopenshell.geom")
+        logger.info("Converting IFC to GLB: %s → %s", ifc_path, glb_path)
+        logger.info("  Using ifcopenshell.geom")
 
         # Open IFC file
         ifc_file = ifcopenshell.open(str(ifc_path))
@@ -94,33 +101,33 @@ class GLBExporter:
         settings.set("generate-uvs", generate_uvs)
 
         # Extract geometry from IFC
-        print("  Extracting geometry...")
+        logger.info("  Extracting geometry...")
         meshes, materials_map = self._extract_geometry(ifc_file, settings)
 
         if not meshes:
             raise RuntimeError("No geometry found in IFC file")
 
-        print(f"  Extracted {len(meshes)} mesh(es)")
-        print(f"  Found {len(materials_map)} unique material(s)")
+        logger.info("  Extracted %d mesh(es)", len(meshes))
+        logger.info("  Found %d unique material(s)", len(materials_map))
 
         # Center model if requested
         if center_model:
             self._center_meshes(meshes)
 
         # Build GLB
-        print("  Building GLB...")
+        logger.info("  Building GLB...")
         gltf = self._build_gltf(meshes, materials_map)
 
         # Write GLB file
         glb_path.parent.mkdir(parents=True, exist_ok=True)
         gltf.save(str(glb_path))
 
-        print(f"✓ GLB export complete: {glb_path}")
+        logger.info("GLB export complete: %s", glb_path)
 
         # Show file sizes
         if glb_path.exists():
             glb_mb = glb_path.stat().st_size / (1024 * 1024)
-            print(f"  GLB size: {glb_mb:.1f} MB")
+            logger.info("  GLB size: %.1f MB", glb_mb)
 
             # Compress if requested
             if compress:
@@ -132,7 +139,7 @@ class GLBExporter:
                 if gz_path.exists():
                     gz_mb = gz_path.stat().st_size / (1024 * 1024)
                     ratio = (1 - gz_mb / glb_mb) * 100
-                    print(f"  Compressed: {gz_mb:.1f} MB ({ratio:.0f}% reduction)")
+                    logger.info("  Compressed: %.1f MB (%.0f%% reduction)", gz_mb, ratio)
 
     def _extract_geometry(
         self, ifc_file: Any, settings: Any
@@ -401,6 +408,251 @@ class GLBExporter:
         gltf.set_binary_blob(bytes(buffer_data))
 
         return gltf
+
+    # ------------------------------------------------------------------ #
+    # Raster plane support                                                 #
+    # ------------------------------------------------------------------ #
+
+    def add_raster_plane(
+        self,
+        gltf: pygltflib.GLTF2,
+        raster: "RasterResult",
+        ref_x: float,
+        ref_y: float,
+        z_offset: float = -0.01,
+        layer_name: Optional[str] = None,
+    ) -> None:
+        """Add a textured ground plane for a raster layer to an existing GLTF2 object.
+
+        The plane is a rectangle whose corners match the raster's bounding box
+        (in RD New / EPSG:28992) expressed *relative to* the model reference point
+        (ref_x, ref_y).  A Z offset of -0.01 m is applied by default so that
+        vector geometry drawn at Z=0 sits on top without Z-fighting.
+
+        The raster image is embedded as a PNG buffer inside the GLB binary blob.
+
+        Args:
+            gltf: GLTF2 object to mutate in-place (must have a binary blob).
+            raster: RasterResult with PIL image and bbox_rd.
+            ref_x: X coordinate of the model reference point (EPSG:28992).
+            ref_y: Y coordinate of the model reference point (EPSG:28992).
+            z_offset: Z position of the plane (default -0.01 m, below vector geometry).
+            layer_name: Node name in the GLB scene (defaults to raster.layer_name).
+        """
+        name = layer_name or raster.layer_name
+        minx, miny, maxx, maxy = raster.bbox_rd
+
+        # ---- Geometry ------------------------------------------------
+        # Four corners, relative to reference point, at z_offset
+        x0 = minx - ref_x
+        x1 = maxx - ref_x
+        y0 = miny - ref_y
+        y1 = maxy - ref_y
+        z = float(z_offset)
+
+        # Vertices in CCW winding (viewed from above):
+        # 0: bottom-left, 1: bottom-right, 2: top-right, 3: top-left
+        positions = np.array(
+            [
+                [x0, y0, z],  # 0 bottom-left
+                [x1, y0, z],  # 1 bottom-right
+                [x1, y1, z],  # 2 top-right
+                [x0, y1, z],  # 3 top-left
+            ],
+            dtype=np.float32,
+        )
+
+        # UV coordinates (origin top-left in image space)
+        uvs = np.array(
+            [
+                [0.0, 1.0],  # 0 bottom-left  → image bottom-left
+                [1.0, 1.0],  # 1 bottom-right → image bottom-right
+                [1.0, 0.0],  # 2 top-right    → image top-right
+                [0.0, 0.0],  # 3 top-left     → image top-left
+            ],
+            dtype=np.float32,
+        )
+
+        # Two triangles: (0,1,2) and (0,2,3)
+        indices = np.array([0, 1, 2, 0, 2, 3], dtype=np.uint32)
+
+        # ---- Image texture -------------------------------------------
+        # Encode PIL Image as PNG bytes and embed in the binary blob
+        img = raster.image.convert("RGB")
+        png_buf = io.BytesIO()
+        img.save(png_buf, format="PNG")
+        png_bytes = png_buf.getvalue()
+
+        # ---- Extend binary blob -------------------------------------
+        # Retrieve existing blob (may be None for fresh GLTF2 objects)
+        existing_blob = gltf.binary_blob() or b""
+        blob = bytearray(existing_blob)
+        base_offset = len(blob)
+
+        def _align(buf: bytearray) -> bytearray:
+            """Pad to 4-byte boundary."""
+            pad = (4 - len(buf) % 4) % 4
+            buf.extend(b"\x00" * pad)
+            return buf
+
+        def _add_buffer_view(
+            buf_bytes: bytes,
+            target: Optional[int] = None,
+        ) -> int:
+            """Append bytes to blob, add BufferView, return its index."""
+            nonlocal blob, base_offset
+            _align(blob)
+            offset = len(blob)
+            blob.extend(buf_bytes)
+            bv = pygltflib.BufferView(
+                buffer=0,
+                byteOffset=offset,
+                byteLength=len(buf_bytes),
+                target=target,
+            )
+            gltf.bufferViews.append(bv)
+            return len(gltf.bufferViews) - 1
+
+        # Position accessor
+        pos_bv = _add_buffer_view(positions.tobytes(), target=pygltflib.ARRAY_BUFFER)
+        pos_min = positions.min(axis=0).tolist()
+        pos_max = positions.max(axis=0).tolist()
+        gltf.accessors.append(
+            pygltflib.Accessor(
+                bufferView=pos_bv,
+                componentType=pygltflib.FLOAT,
+                count=4,
+                type=pygltflib.VEC3,
+                min=pos_min,
+                max=pos_max,
+            )
+        )
+        pos_acc = len(gltf.accessors) - 1
+
+        # UV accessor
+        uv_bv = _add_buffer_view(uvs.tobytes(), target=pygltflib.ARRAY_BUFFER)
+        gltf.accessors.append(
+            pygltflib.Accessor(
+                bufferView=uv_bv,
+                componentType=pygltflib.FLOAT,
+                count=4,
+                type=pygltflib.VEC2,
+            )
+        )
+        uv_acc = len(gltf.accessors) - 1
+
+        # Index accessor
+        idx_bv = _add_buffer_view(indices.tobytes(), target=pygltflib.ELEMENT_ARRAY_BUFFER)
+        gltf.accessors.append(
+            pygltflib.Accessor(
+                bufferView=idx_bv,
+                componentType=pygltflib.UNSIGNED_INT,
+                count=6,
+                type=pygltflib.SCALAR,
+            )
+        )
+        idx_acc = len(gltf.accessors) - 1
+
+        # Image (PNG bytes) — no ARRAY_BUFFER target for image data
+        img_bv = _add_buffer_view(png_bytes, target=None)
+        gltf.images.append(pygltflib.Image(bufferView=img_bv, mimeType="image/png"))
+        img_idx = len(gltf.images) - 1
+
+        # Sampler (bilinear, clamp to edge)
+        gltf.samplers.append(
+            pygltflib.Sampler(
+                magFilter=pygltflib.LINEAR,
+                minFilter=pygltflib.LINEAR_MIPMAP_LINEAR,
+                wrapS=pygltflib.CLAMP_TO_EDGE,
+                wrapT=pygltflib.CLAMP_TO_EDGE,
+            )
+        )
+        sampler_idx = len(gltf.samplers) - 1
+
+        # Texture
+        gltf.textures.append(pygltflib.Texture(source=img_idx, sampler=sampler_idx))
+        tex_idx = len(gltf.textures) - 1
+
+        # Material with baseColorTexture
+        gltf.materials.append(
+            pygltflib.Material(
+                name=f"raster_{name}",
+                pbrMetallicRoughness=pygltflib.PbrMetallicRoughness(
+                    baseColorTexture=pygltflib.TextureInfo(index=tex_idx),
+                    metallicFactor=0.0,
+                    roughnessFactor=1.0,
+                ),
+                doubleSided=True,
+            )
+        )
+        mat_idx = len(gltf.materials) - 1
+
+        # Mesh + Node
+        primitive = pygltflib.Primitive(
+            attributes=pygltflib.Attributes(POSITION=pos_acc, TEXCOORD_0=uv_acc),
+            indices=idx_acc,
+            material=mat_idx,
+        )
+        gltf.meshes.append(pygltflib.Mesh(name=f"raster_{name}", primitives=[primitive]))
+        mesh_idx = len(gltf.meshes) - 1
+
+        gltf.nodes.append(pygltflib.Node(mesh=mesh_idx, name=f"raster_{name}"))
+        node_idx = len(gltf.nodes) - 1
+
+        # Add node to the active scene
+        if gltf.scenes:
+            gltf.scenes[gltf.scene or 0].nodes.append(node_idx)
+        else:
+            gltf.scenes = [pygltflib.Scene(nodes=[node_idx])]
+            gltf.scene = 0
+
+        # Update the buffer size and binary blob
+        gltf.buffers[0].byteLength = len(blob)
+        gltf.set_binary_blob(bytes(blob))
+
+        logger.info(
+            "Added raster plane '%s' (%dx%d px, %.1f MB PNG)",
+            name,
+            img.width,
+            img.height,
+            len(png_bytes) / (1024 * 1024),
+        )
+
+    def add_raster_planes_to_glb(
+        self,
+        glb_path: Path,
+        raster_layers: "dict[str, RasterResult]",
+        ref_x: float,
+        ref_y: float,
+        z_offset: float = -0.01,
+    ) -> None:
+        """Load an existing GLB, append raster planes, and overwrite in-place.
+
+        Args:
+            glb_path: Path to the GLB file to modify.
+            raster_layers: Mapping of layer name → RasterResult.
+            ref_x: Model reference point X (EPSG:28992).
+            ref_y: Model reference point Y (EPSG:28992).
+            z_offset: Z position of the planes (default -0.01 m).
+        """
+        if not glb_path.exists():
+            logger.warning("GLB file not found, skipping raster planes: %s", glb_path)
+            return
+
+        gltf = pygltflib.GLTF2().load(str(glb_path))
+
+        for layer_name, raster in raster_layers.items():
+            self.add_raster_plane(
+                gltf,
+                raster,
+                ref_x=ref_x,
+                ref_y=ref_y,
+                z_offset=z_offset,
+                layer_name=layer_name,
+            )
+
+        gltf.save(str(glb_path))
+        logger.info("Raster planes added to %s (%d layers)", glb_path, len(raster_layers))
 
 
 def convert_ifc_to_glb(

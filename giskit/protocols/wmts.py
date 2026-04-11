@@ -262,7 +262,7 @@ class WMTSProtocol(Protocol):
         self,
         bbox: tuple[float, float, float, float],
         product: str,
-        resolution: int,
+        resolution: float,
         crs: str = "EPSG:28992",
         zoom: Optional[int] = None,
         progress_callback: Optional[Any] = None,

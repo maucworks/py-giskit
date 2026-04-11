@@ -5,13 +5,14 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Union
 
 import geopandas as gpd
 from shapely.geometry import Point, Polygon
 
 from giskit.core.constants import BGT_ALL_LAYERS_THRESHOLD
 from giskit.core.geocoding import geocode
+from giskit.core.raster import RasterResult
 from giskit.core.recipe import Dataset, Location, LocationType, Recipe
 from giskit.core.spatial import transform_bbox, transform_point
 from giskit.providers.base import get_provider
@@ -42,7 +43,7 @@ class RecipeRunner:
 
     async def execute(
         self, progress_callback: Optional[Callable[[str, float], None]] = None
-    ) -> Optional[dict[str, gpd.GeoDataFrame]]:
+    ) -> Optional[tuple[dict[str, gpd.GeoDataFrame], dict[str, RasterResult]]]:
         """Execute the recipe and return downloaded data as layers.
 
         Args:
@@ -50,7 +51,9 @@ class RecipeRunner:
                              Called to report progress (0.0 to 1.0)
 
         Returns:
-            Dictionary mapping layer names to GeoDataFrames, or None if no data downloaded
+            Tuple of (vector_layers, raster_layers), or None if no data downloaded.
+            - vector_layers: dict mapping layer names to GeoDataFrames
+            - raster_layers: dict mapping layer names to RasterResults
         """
         # Calculate bounding box
         if progress_callback:
@@ -59,10 +62,10 @@ class RecipeRunner:
         bbox = await self.recipe.get_bbox_wgs84()
         logger.debug(f"BBox (WGS84): {bbox}")
 
-        # Download datasets
-        layers = await self._download_datasets(bbox, progress_callback)
+        # Download datasets — split into vector and raster
+        layers, raster_layers = await self._download_datasets(bbox, progress_callback)
 
-        # Add metadata layer if we have data and output format is gpkg
+        # Add metadata layer if we have vector data and output format is gpkg
         if layers and self.recipe.output.format.value == "gpkg":
             if progress_callback:
                 progress_callback("Adding metadata layer...", 0.95)
@@ -73,13 +76,15 @@ class RecipeRunner:
         if progress_callback:
             progress_callback("Complete", 1.0)
 
-        return layers if layers else None
+        if not layers and not raster_layers:
+            return None
+        return layers, raster_layers
 
     async def _download_datasets(
         self,
         bbox: tuple[float, float, float, float],
         progress_callback: Optional[Callable[[str, float], None]] = None,
-    ) -> dict[str, gpd.GeoDataFrame]:
+    ) -> tuple[dict[str, gpd.GeoDataFrame], dict[str, RasterResult]]:
         """Download all datasets specified in the recipe in parallel.
 
         Args:
@@ -87,9 +92,10 @@ class RecipeRunner:
             progress_callback: Optional progress callback
 
         Returns:
-            Dictionary mapping layer names to GeoDataFrames
+            Tuple of (vector_layers, raster_layers)
         """
         layers: dict[str, gpd.GeoDataFrame] = {}
+        raster_layers: dict[str, RasterResult] = {}
 
         # Convert bbox to Location for compatibility
         bbox_location = Location(
@@ -107,23 +113,25 @@ class RecipeRunner:
 
         async def _download_one(
             dataset: Dataset,
-        ) -> tuple[str, Optional[gpd.GeoDataFrame]]:
-            """Download a single dataset and return (provider_label, gdf_or_None)."""
+        ) -> tuple[str, Union[gpd.GeoDataFrame, RasterResult, None]]:
+            """Download a single dataset and return (provider_label, result_or_None)."""
             provider = get_provider(dataset.provider)
             label = dataset.provider
             try:
-                gdf = await provider.download_dataset(
+                result = await provider.download_dataset(
                     dataset=dataset,
                     location=bbox_location,
                     output_path=output_path,
                     output_crs=self.recipe.output.crs,
                 )
-                return label, gdf
+                return label, result
             except Exception as e:
                 logger.error(f"Failed to download {label}: {e}", exc_info=True)
                 return label, None
 
-        async def _tracked_download(dataset: Dataset) -> tuple[str, Optional[gpd.GeoDataFrame]]:
+        async def _tracked_download(
+            dataset: Dataset,
+        ) -> tuple[str, Union[gpd.GeoDataFrame, RasterResult, None]]:
             """Wrap download with progress reporting."""
             nonlocal completed_count
             result = await _download_one(dataset)
@@ -144,15 +152,21 @@ class RecipeRunner:
             *(_tracked_download(dataset) for dataset in self.recipe.datasets)
         )
 
-        # Collect results in recipe order
-        for (label, gdf), dataset in zip(results, self.recipe.datasets, strict=False):
-            if gdf is not None and not gdf.empty:
-                logger.info(f"Downloaded {len(gdf)} features from {label}")
-                self._normalize_layer_names(layers, gdf, dataset)
-            elif gdf is not None:
-                logger.warning(f"No features found for {label}")
+        # Collect results in recipe order — split raster and vector
+        for (label, result), dataset in zip(results, self.recipe.datasets, strict=False):
+            if result is None:
+                continue
+            if isinstance(result, RasterResult):
+                logger.info(f"Downloaded raster layer '{result.layer_name}' from {label}")
+                raster_layers[result.layer_name] = result
+            elif isinstance(result, gpd.GeoDataFrame):
+                if not result.empty:
+                    logger.info(f"Downloaded {len(result)} features from {label}")
+                    self._normalize_layer_names(layers, result, dataset)
+                else:
+                    logger.warning(f"No features found for {label}")
 
-        return layers
+        return layers, raster_layers
 
     def _normalize_layer_names(
         self,

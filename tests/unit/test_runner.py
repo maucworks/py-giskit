@@ -67,9 +67,12 @@ class TestRecipeRunner:
             result = await runner.execute()
 
             assert result is not None
-            assert isinstance(result, dict)
-            # Should have at least one layer
-            assert len(result) > 0
+            assert isinstance(result, tuple)
+            vector_layers, raster_layers = result
+            assert isinstance(vector_layers, dict)
+            assert isinstance(raster_layers, dict)
+            # Should have at least one vector layer
+            assert len(vector_layers) > 0
 
     @pytest.mark.asyncio
     async def test_execute_with_progress_callback(self, runner):
