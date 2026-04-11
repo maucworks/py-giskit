@@ -202,15 +202,11 @@ class OutputManager:
             save_gdf.to_file(output_path, driver="GPKG", layer=layer_name)
             total_features += len(save_gdf)
 
-        # Write raster bounding boxes as vector layers so GPKG contains a
-        # spatial footprint for each raster layer (useful in QGIS / desktop GIS).
+        # Write raster layers as GeoPackage raster tiles (OGC GPKG extension).
+        # Each RasterResult becomes a named raster table inside the same .gpkg file,
+        # readable by QGIS, GDAL, and ArcGIS Pro without extra files.
         if raster_layers:
-            for layer_name, raster in raster_layers.items():
-                bbox_gdf = self._raster_to_bbox_gdf(layer_name, raster)
-                bbox_layer_name = f"_raster_{layer_name}"
-                bbox_gdf.to_file(output_path, driver="GPKG", layer=bbox_layer_name)
-                logger.info("Saved raster bbox layer: %s", bbox_layer_name)
-
+            self._save_rasters_to_gpkg(raster_layers, output_path, progress_callback)
         if progress_callback:
             progress_callback(
                 f"Successfully saved {total_features} features in {len(layers)} layers to {output_path}",
@@ -683,40 +679,63 @@ class OutputManager:
             if progress_callback:
                 progress_callback(f"OBJ export failed: {e}", "error")
 
-    @staticmethod
-    def _raster_to_bbox_gdf(layer_name: str, raster: RasterResult) -> gpd.GeoDataFrame:
-        """Convert a RasterResult to a single-row GeoDataFrame with its bbox polygon.
+    def _save_rasters_to_gpkg(
+        self,
+        raster_layers: dict[str, RasterResult],
+        gpkg_path: Path,
+        progress_callback: Optional[Callable[[str, str], None]] = None,
+    ) -> None:
+        """Append raster layers into an existing GeoPackage as raster tile tables.
 
-        The polygon is in EPSG:28992 (RD New) and carries metadata attributes
-        (pixel dimensions, pixel size, source CRS) so the layer is self-describing
-        when opened in QGIS or ArcGIS.
+        Uses GDAL's GPKG driver with ``APPEND_SUBDATASET=YES`` and
+        ``RASTER_TABLE=<name>`` so each RasterResult ends up as a named raster
+        table inside the same ``.gpkg`` file, alongside the vector layers.
+        The result is readable by QGIS, GDAL, and ArcGIS Pro.
 
         Args:
-            layer_name: Name used for the raster layer.
-            raster: RasterResult to convert.
-
-        Returns:
-            Single-row GeoDataFrame with CRS EPSG:28992.
+            raster_layers: Mapping of layer name → RasterResult.
+            gpkg_path: Path to the GeoPackage to append into (must already exist).
+            progress_callback: Optional callback(message, level).
         """
-        from shapely.geometry import box
+        try:
+            import numpy as np
+            import rasterio
+            from rasterio.transform import from_bounds
+        except ImportError as e:
+            raise ImportError(
+                "Saving raster layers to GPKG requires rasterio. Install with: pip install rasterio"
+            ) from e
 
-        minx, miny, maxx, maxy = raster.bbox_rd
-        geom = box(minx, miny, maxx, maxy)
-        gdf = gpd.GeoDataFrame(
-            {
-                "layer_name": [layer_name],
-                "width_px": [raster.image.width],
-                "height_px": [raster.image.height],
-                "pixel_size_x_m": [round(raster.pixel_size_x, 4)],
-                "pixel_size_y_m": [round(raster.pixel_size_y, 4)],
-                "width_m": [round(raster.width_m, 2)],
-                "height_m": [round(raster.height_m, 2)],
-                "source_crs": [raster.source_crs],
-                "geometry": [geom],
-            },
-            crs="EPSG:28992",
-        )
-        return gdf
+        for layer_name, raster in raster_layers.items():
+            img = raster.image.convert("RGB")
+            arr = np.array(img)
+            minx, miny, maxx, maxy = raster.bbox_rd
+            width, height = img.size
+            transform = from_bounds(minx, miny, maxx, maxy, width, height)
+
+            with rasterio.open(
+                str(gpkg_path),
+                "w",
+                driver="GPKG",
+                height=height,
+                width=width,
+                count=3,
+                dtype=arr.dtype,
+                crs=raster.source_crs,
+                transform=transform,
+                RASTER_TABLE=layer_name,
+                APPEND_SUBDATASET="YES",
+            ) as dst:
+                dst.write(arr[:, :, 0], 1)
+                dst.write(arr[:, :, 1], 2)
+                dst.write(arr[:, :, 2], 3)
+
+            logger.info("Saved raster layer '%s' to GPKG table '%s'", layer_name, layer_name)
+            if progress_callback:
+                size_mb = gpkg_path.stat().st_size / (1024 * 1024)
+                progress_callback(
+                    f"Saved raster '{layer_name}' to GPKG ({size_mb:.1f} MB total)", "success"
+                )
 
     @staticmethod
     def _clean_internal_columns(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
