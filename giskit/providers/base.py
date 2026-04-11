@@ -337,3 +337,10 @@ def list_providers() -> list[str]:
         List of provider identifiers
     """
     return _registry.list_providers()
+
+
+# Register built-in providers
+# Import here to avoid circular imports
+from giskit.providers.ogc_features import OGCFeaturesProvider
+
+register_provider("ogc-features", OGCFeaturesProvider)

@@ -1,0 +1,61 @@
+{
+  "name": "BGT + BAG3D LoD 2.2 for 16, Vleysmanlaan, Rijksdorp, Wassenaar, Zuid-Holland, Nederland, 2242 PN, Nederland",
+  "output": {
+    "crs": "EPSG:28992",
+    "path": "onderlegger_kadaster.gpkg",
+    "format": "gpkg",
+    "overwrite": true,
+    "ifc_export": {
+      "path": "onderlegger_kadaster.ifc",
+      "glb_path": "onderlegger_kadaster.glb",
+      "site_name": "16__vleysmanlaan__rijksdorp__wassenaar__zuid-holland__nederland__2242_pn__nederland",
+      "ifc_version": "IFC4",
+      "normalize_z": true,
+      "layer_colors": {
+        "bag3d_lod22": {
+          "roof": [
+            0.8,
+            0.2,
+            0.1
+          ],
+          "wall": [
+            0.9,
+            0.85,
+            0.75
+          ],
+          "default": [
+            0.7,
+            0.7,
+            0.7
+          ]
+        }
+      },
+      "obj_zip_path": "onderlegger_kadaster_obj.zip",
+      "glb_center_model": false,
+      "glb_use_world_coords": true
+    },
+    "layer_prefix": "bgt_"
+  },
+  "datasets": [
+    {  "provider": "pdok",
+      "service": "kadastralekaart-wfs",
+      "layers": [
+        "perceel",
+        "kadastrale-grens",
+        "bebouwing",
+        "openbareruimtenaam",
+        "nummeraanduidingreeks"
+      ]
+    }
+  ],
+  "location": {
+    "crs": "EPSG:4326",
+    "type": "point",
+    "value": [
+      4.3856403,
+      52.1577355
+    ],
+    "radius": 100
+  },
+  "description": "3D gebouwen (BAG3D LoD 2.2) en basis topografie (BGT) - 16, Vleysmanlaan, Rijksdorp, Wassenaar, Zuid-Holland, Nederland, 2242 PN, Nederland"
+}

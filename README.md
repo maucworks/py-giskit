@@ -23,7 +23,7 @@ GISKit is a Python tool for downloading Dutch spatial data using simple JSON "re
 ### Key Features
 
 - **Recipe-Driven**: Define your data needs in simple JSON
-- **Multi-Provider**: Access 68+ datasets from 5 providers (PDOK, BAG3D, Klimaateffectatlas, DUO, NDOV)
+- **Multi-Provider**: Access 73+ datasets from 5 providers (PDOK, BAG3D, Klimaateffectatlas, DUO, NDOV)
 - **Service Catalog**: Discover available data with search and filtering
 - **Smart Downloads**: Automatic bbox calculation from addresses
 - **Single Output**: Everything combined in one GeoPackage
@@ -443,7 +443,6 @@ search_services("elevation")  # Find specific data
 
 ### Current Providers
 
-GISKit provides access to **68+ datasets** from 5 different providers:
 
 **PDOK** (52 services) - Dutch government spatial data
 **BAG3D** (1 service) - 3D building models in CityJSON format
