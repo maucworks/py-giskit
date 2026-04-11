@@ -39,6 +39,7 @@ class OutputManager:
         self,
         layers: dict[str, gpd.GeoDataFrame],
         progress_callback: Optional[Callable[[str, str], None]] = None,
+        raster_layers: Optional[dict[str, RasterResult]] = None,
     ) -> Path:
         """Save layers to output file in the configured format.
 
@@ -46,6 +47,8 @@ class OutputManager:
             layers: Dictionary mapping layer names to GeoDataFrames
             progress_callback: Optional callback(message: str, level: str) for status updates
                              level can be "info", "success", "warning", "error"
+            raster_layers: Optional raster layers to embed as textured ground planes in GLB
+                          exports (passed through to _auto_export_ifc / _auto_export_glb).
 
         Returns:
             Path to the saved output file
@@ -68,13 +71,13 @@ class OutputManager:
             progress_callback(f"Saving to {output_path}...", "info")
 
         if output_format == "gpkg":
-            self._save_gpkg(layers, output_path, progress_callback)
+            self._save_gpkg(layers, output_path, progress_callback, raster_layers=raster_layers)
         elif output_format in ("geojson", "shp", "fgb"):
             self._save_single_layer_format(layers, output_path, output_format, progress_callback)
         elif output_format == "ifc":
             self._save_ifc(layers, output_path, progress_callback)
         elif output_format == "glb":
-            self._save_glb(layers, output_path, progress_callback)
+            self._save_glb(layers, output_path, progress_callback, raster_layers=raster_layers)
         else:
             raise ValueError(f"Unsupported output format: {output_format}")
 
@@ -181,6 +184,7 @@ class OutputManager:
         layers: dict[str, gpd.GeoDataFrame],
         output_path: Path,
         progress_callback: Optional[Callable[[str, str], None]] = None,
+        raster_layers: Optional[dict[str, RasterResult]] = None,
     ) -> None:
         """Save layers to GeoPackage format.
 
@@ -188,6 +192,7 @@ class OutputManager:
             layers: Dictionary mapping layer names to GeoDataFrames
             output_path: Path to save the GeoPackage
             progress_callback: Optional callback for status updates
+            raster_layers: Optional raster layers to embed in GLB auto-export
         """
         total_features = 0
 
@@ -205,7 +210,7 @@ class OutputManager:
 
         # Handle auto-exports
         if self.recipe.output.ifc_export:
-            self._auto_export_ifc(output_path, progress_callback)
+            self._auto_export_ifc(output_path, progress_callback, raster_layers=raster_layers)
 
     def _save_single_layer_format(
         self,
@@ -351,6 +356,7 @@ class OutputManager:
         layers: dict[str, gpd.GeoDataFrame],
         output_path: Path,
         progress_callback: Optional[Callable[[str, str], None]] = None,
+        raster_layers: Optional[dict[str, RasterResult]] = None,
     ) -> None:
         """Save layers to GLB format (via IFC intermediate).
 
@@ -358,6 +364,7 @@ class OutputManager:
             layers: Dictionary mapping layer names to GeoDataFrames
             output_path: Path to save the GLB file
             progress_callback: Optional callback for status updates
+            raster_layers: Optional raster layers to embed as textured ground planes
 
         Raises:
             ImportError: If required dependencies are missing
@@ -445,6 +452,20 @@ class OutputManager:
                 else True,
             )
 
+            # Embed raster layers as textured ground planes
+            if raster_layers and output_path.exists():
+                if progress_callback:
+                    progress_callback(
+                        f"Embedding {len(raster_layers)} raster layer(s) as ground planes...",
+                        "info",
+                    )
+                glb_exporter.add_raster_planes_to_glb(
+                    glb_path=output_path,
+                    raster_layers=raster_layers,
+                    ref_x=ifc_exporter.ref_x,
+                    ref_y=ifc_exporter.ref_y,
+                )
+
             if output_path.exists():
                 size_mb = output_path.stat().st_size / (1024 * 1024)
                 if progress_callback:
@@ -464,12 +485,14 @@ class OutputManager:
         self,
         gpkg_path: Path,
         progress_callback: Optional[Callable[[str, str], None]] = None,
+        raster_layers: Optional[dict[str, RasterResult]] = None,
     ) -> None:
         """Auto-export GPKG to IFC if configured.
 
         Args:
             gpkg_path: Path to the GeoPackage file
             progress_callback: Optional callback for status updates
+            raster_layers: Optional raster layers to embed as textured planes in GLB
         """
         if not self.recipe.output.ifc_export:
             return
@@ -518,7 +541,12 @@ class OutputManager:
 
             # Auto-export to GLB if configured
             if self.recipe.output.ifc_export.glb_path:
-                self._auto_export_glb(progress_callback)
+                self._auto_export_glb(
+                    progress_callback,
+                    raster_layers=raster_layers,
+                    ref_x=exporter.ref_x,
+                    ref_y=exporter.ref_y,
+                )
 
             # Auto-export to OBJ ZIP if configured
             if self.recipe.output.ifc_export.obj_zip_path:
@@ -536,11 +564,17 @@ class OutputManager:
     def _auto_export_glb(
         self,
         progress_callback: Optional[Callable[[str, str], None]] = None,
+        raster_layers: Optional[dict[str, RasterResult]] = None,
+        ref_x: float = 0.0,
+        ref_y: float = 0.0,
     ) -> None:
         """Auto-export IFC to GLB if configured.
 
         Args:
             progress_callback: Optional callback for status updates
+            raster_layers: Optional raster layers to embed as textured ground planes
+            ref_x: Model reference point X in EPSG:28992 (used for raster plane alignment)
+            ref_y: Model reference point Y in EPSG:28992 (used for raster plane alignment)
         """
         if not self.recipe.output.ifc_export or not self.recipe.output.ifc_export.glb_path:
             return
@@ -566,6 +600,20 @@ class OutputManager:
                 use_world_coords=self.recipe.output.ifc_export.glb_use_world_coords,
                 center_model=self.recipe.output.ifc_export.glb_center_model,
             )
+
+            # Embed raster layers as textured ground planes
+            if raster_layers and self.recipe.output.ifc_export.glb_path.exists():
+                if progress_callback:
+                    progress_callback(
+                        f"Embedding {len(raster_layers)} raster layer(s) as ground planes...",
+                        "info",
+                    )
+                glb_exporter.add_raster_planes_to_glb(
+                    glb_path=self.recipe.output.ifc_export.glb_path,
+                    raster_layers=raster_layers,
+                    ref_x=ref_x,
+                    ref_y=ref_y,
+                )
 
             if self.recipe.output.ifc_export.glb_path.exists():
                 glb_mb = self.recipe.output.ifc_export.glb_path.stat().st_size / (1024 * 1024)

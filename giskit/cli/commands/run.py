@@ -144,7 +144,9 @@ def run(recipe_path: Path, verbose: bool, dry_run: bool, log_level: str) -> None
 
                 try:
                     if layers:
-                        output_manager.save_layers(layers, output_progress)
+                        output_manager.save_layers(
+                            layers, output_progress, raster_layers=raster_layers or None
+                        )
                     if raster_layers:
                         output_manager.save_raster_layers(raster_layers, output_progress)
                 except ImportError as e:
