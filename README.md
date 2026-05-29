@@ -3,7 +3,7 @@
 **Recipe-driven spatial data downloader for Netherlands geo-data**
 
 [![Python 3.10-3.12](https://img.shields.io/badge/python-3.10--3.12-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: LGPLv3](https://img.shields.io/badge/license-LGPLv3-blue.svg)](LICENSE.LESSER)
 [![Tests](https://img.shields.io/badge/tests-123%20passing-brightgreen.svg)](tests/)
 
 > **⚠️ Version Policy**: Odd minor versions (0.1.x, 0.3.x, 0.5.x, etc.) may introduce breaking changes as we refine the architecture. Even minor versions (0.2.x, 0.4.x, etc.) maintain backward compatibility. Pin to specific versions in production.
@@ -741,7 +741,7 @@ Contributions welcome! This project is in active development.
 
 ## License
 
-MIT License - See [LICENSE](LICENSE)
+GNU Lesser General Public License v3.0 or later - See [LICENSE](LICENSE) and [LICENSE.LESSER](LICENSE.LESSER)
 
 ---
 

@@ -3,7 +3,7 @@ name = "pygiskit"
 version = "0.1.9"
 description = "Recipe-driven spatial data downloader for Dutch geo-data"
 authors = ["Sander Boer <sanderboer@mauc.nl>"]
-license = "MIT"
+license = "LGPL-3.0-or-later"
 readme = "README.md"
 homepage = "https://github.com/maucworks/py-giskit"
 repository = "https://github.com/maucworks/py-giskit"
@@ -14,7 +14,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: GIS",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

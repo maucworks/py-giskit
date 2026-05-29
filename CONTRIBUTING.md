@@ -324,7 +324,7 @@ Volg [Semantic Versioning](https://semver.org/):
 
 ## 📄 Licentie
 
-Door bij te dragen ga je akkoord dat je bijdragen gelicenseerd worden onder de MIT License.
+Door bij te dragen ga je akkoord dat je bijdragen gelicenseerd worden onder de GNU Lesser General Public License v3.0 or later (LGPLv3+).
 
 ---
 
